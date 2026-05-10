@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Trading Bot Hub</title>
+    <style>
+        body { background: #0a0a0f; color: #e2e8f0; font-family: sans-serif; padding: 2rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
+        .card { background: #111118; border: 1px solid #1e1e2e; padding: 1.5rem; border-radius: 12px; transition: 0.3s; }
+        .card:hover { border-color: #7c3aed; transform: translateY(-5px); }
+        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; }
+        h1 { margin-bottom: 2rem; font-size: 2rem; }
+        a { text-decoration: none; color: inherit; }
+        .btn { display: inline-block; margin-top: 1rem; padding: 0.5rem 1rem; background: #7c3aed; border-radius: 6px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Portail de Supervision Crypto</h1>
+    <div class="grid">
+        <a href="eth-bot.html" class="card">
+            <div style="display:flex; justify-content:space-between;">
+                <h3>ETH / USDT Bot</h3>
+                <span class="status"></span>
+            </div>
+            <p style="color:#64748b; margin-top:0.5rem;">Stratégie : Régime + ATR Adaptatif</p>
+            <div class="btn">Ouvrir le Dashboard</div>
+        </a>
+
+        <div class="card" style="opacity: 0.5; cursor: not-allowed;">
+            <h3>BTC / USDT Bot</h3>
+            <p style="color:#64748b; margin-top:0.5rem;">En attente de déploiement...</p>
+        </div>
+    </div>
+</body>
+</html>

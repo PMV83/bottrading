@@ -32,7 +32,7 @@ CONFIG = {
 
     # Fichiers
     "state_file":       "state.json",
-    "log_file":         "trades.log",
+    "log_file":         "eth-trades.log",
 
     # API Binance
     "api_key":          "",
