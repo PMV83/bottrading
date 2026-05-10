@@ -1,0 +1,11 @@
+# Fichiers contenant des secrets / clés API
+.env
+
+# Fichiers de logs qui changent tout le temps
+trades.log.txt
+*.log
+
+# Dossiers générés automatiquement par Python
+__pycache__/
+.venv/
+venv/

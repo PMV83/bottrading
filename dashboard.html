@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETH Bot Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+  :root {
+    --bg:#0a0a0f; --surface:#111118; --border:#1e1e2e;
+    --accent:#7c3aed; --green:#10b981; --red:#ef4444; --amber:#f59e0b;
+    --text:#e2e8f0; --muted:#64748b; --card:#13131f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Syne',sans-serif; min-height:100vh; padding:2rem; }
+  body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events:none; z-index:0; opacity:0.4; }
+  .container { max-width:1100px; margin:0 auto; position:relative; z-index:1; }
+  .header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:2.5rem; }
+  .header-left h1 { font-size:2.2rem; font-weight:800; letter-spacing:-0.03em; }
+  .header-left h1 span { color:var(--accent); }
+  .header-left p { color:var(--muted); font-size:0.85rem; margin-top:0.3rem; font-family:'JetBrains Mono',monospace; }
+  .live-dot { display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--green); font-family:'JetBrains Mono',monospace; margin-top:0.5rem; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:blink 1.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .regime-badge { padding:0.5rem 1.2rem; border-radius:100px; font-size:0.85rem; font-weight:600; letter-spacing:0.05em; border:1px solid; }
+  .regime-HAUSSIER { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:var(--green); }
+  .regime-RANGE { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.3); color:var(--amber); }
+  .regime-BAISSIER { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:var(--red); }
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+  .metric-card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.25rem 1.5rem; position:relative; overflow:hidden; }
+  .metric-card::after { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--accent); opacity:0.5; }
+  .metric-card.green::after { background:var(--green); }
+  .metric-card.red::after { background:var(--red); }
+  .metric-card.amber::after { background:var(--amber); }
+  .metric-label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.6rem; font-family:'JetBrains Mono',monospace; }
+  .metric-value { font-size:1.9rem; font-weight:800; letter-spacing:-0.02em; }
+  .metric-sub { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; font-family:'JetBrains Mono',monospace; }
+  .green-text { color:var(--green); } .red-text { color:var(--red); } .amber-text { color:var(--amber); }
+  .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.5rem; }
+  .card-title { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:1.25rem; font-family:'JetBrains Mono',monospace; }
+  .trade-item { display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; animation:fadeIn 0.3s ease; }
+  .trade-item:last-child { border:none; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+  .trade-left { display:flex; align-items:center; gap:10px; }
+  .trade-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .trade-icon.buy { background:rgba(16,185,129,0.15); }
+  .trade-icon.sell-tp { background:rgba(124,58,237,0.15); }
+  .trade-icon.sell-sl { background:rgba(239,68,68,0.15); }
+  .trade-info { font-family:'JetBrains Mono',monospace; }
+  .trade-type { font-size:0.75rem; color:var(--muted); }
+  .trade-price { font-size:0.85rem; font-weight:500; }
+  .trade-pnl { font-family:'JetBrains Mono',monospace; font-size:0.9rem; font-weight:700; padding:3px 10px; border-radius:6px; }
+  .pnl-pos { background:rgba(16,185,129,0.1); color:var(--green); }
+  .pnl-neg { background:rgba(239,68,68,0.1); color:var(--red); }
+  .pnl-neu { background:rgba(100,116,139,0.1); color:var(--muted); }
+  .progress-section { margin-top:1.5rem; }
+  .progress-label { display:flex; justify-content:space-between; font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem; font-family:'JetBrains Mono',monospace; }
+  .progress-bar { height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
+  .progress-fill { height:100%; border-radius:3px; transition:width 1s ease; }
+  .conditions { display:flex; gap:8px; flex-wrap:wrap; margin-top:1rem; }
+  .cond { padding:4px 12px; border-radius:6px; font-size:0.72rem; font-family:'JetBrains Mono',monospace; border:1px solid var(--border); color:var(--muted); }
+  .cond.active { border-color:var(--green); color:var(--green); background:rgba(16,185,129,0.08); }
+  .log-area { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:1rem; max-height:220px; overflow-y:auto; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); line-height:1.8; }
+  .log-area .log-buy { color:var(--green); }
+  .log-area .log-sell { color:var(--red); }
+  .log-area .log-trail { color:var(--accent); }
+  .log-area .log-warn { color:var(--amber); }
+  .refresh-info { font-size:0.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:0.5rem; }
+  .empty { color:var(--muted); font-size:0.85rem; text-align:center; padding:2rem; font-family:'JetBrains Mono',monospace; }
+  @media(max-width:768px) { .metrics{grid-template-columns:repeat(2,1fr);} .bottom-grid{grid-template-columns:1fr;} body{padding:1rem;} }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-left">
+      <h1>ETH <span>Bot</span> Dashboard</h1>
+      <p>ETHUSDT · Paper Trading · v3.0</p>
+      <div class="live-dot"><div class="dot"></div><span id="lastUpdate">Chargement...</span></div>
+      <div class="refresh-info" id="nextRefresh">Actualisation dans 30s</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+      <div id="regimeBadge" class="regime-badge regime-RANGE">↔ RANGE</div>
+    </div>
+  </div>
+
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Capital actuel</div>
+      <div class="metric-value" id="valCapital">54,00 €</div>
+      <div class="metric-sub" id="subCapital">Départ : 54,00 €</div>
+    </div>
+    <div class="metric-card green">
+      <div class="metric-label">P&L total</div>
+      <div class="metric-value green-text" id="valPnl">+0,00 €</div>
+      <div class="metric-sub" id="subPnl">+0,00%</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="metric-label">Win rate</div>
+      <div class="metric-value amber-text" id="valWinrate">— %</div>
+      <div class="metric-sub" id="subTrades">0 trades</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Dernier signal</div>
+      <div class="metric-value" id="valSignal" style="font-size:1.2rem;">—</div>
+      <div class="metric-sub" id="subSignal">En attente</div>
+    </div>
+  </div>
+
+  <div class="bottom-grid">
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Historique des trades</span>
+        <span id="tradeCount" style="color:var(--accent);">0 trades</span>
+      </div>
+      <div id="tradesList"><div class="empty">Chargement automatique...</div></div>
+      <div class="progress-section">
+        <div class="progress-label">
+          <span class="red-text">SL</span><span>Position</span><span class="green-text">TP</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill" style="width:50%;background:var(--accent);"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;">
+        <span>Logs en direct</span>
+        <span id="logCount" style="color:var(--muted);font-size:0.7rem;">0 lignes</span>
+      </div>
+      <div id="logArea" class="log-area"><span>Chargement...</span></div>
+      <div style="margin-top:1.25rem;">
+        <div class="card-title">Conditions détectées</div>
+        <div class="conditions" id="conditions">
+          <span class="cond" id="cEMA">EMA cross</span>
+          <span class="cond" id="cRSI">RSI oversold</span>
+          <span class="cond" id="cMACD">MACD haussier</span>
+          <span class="cond" id="cVol">Volume OK</span>
+          <span class="cond" id="cTrend">Tendance</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CAPITAL_INIT = 54.0;
+let countdown = 30;
+
+function parseLog(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  document.getElementById('logCount').textContent = lines.length + ' lignes';
+  document.getElementById('lastUpdate').textContent = 'Mis a jour · ' + new Date().toLocaleTimeString('fr-FR');
+
+  let capital = CAPITAL_INIT;
+  let lastSignal = 'HOLD';
+  let lastConditions = '0';
+  let lastRegime = 'RANGE';
+  let lastPrice = '';
+  let lastEntry = 0, lastSL = 0;
+  const trades = [];
+  let pendingClose = false;
+  let pendingWin = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Achat - ligne du header
+    if (line.includes('ACHAT') && line.includes('ETHUSDT')) {
+      pendingClose = false;
+      // Cherche le prix sur la ligne suivante (Entree : $X)
+      for (let j = i+1; j < Math.min(i+5, lines.length); j++) {
+        const em = lines[j].match(/Entr.e\s*:\s*\$([0-9,.]+)/);
+        if (em) { lastEntry = parseFloat(em[1].replace(/,/g,'')); break; }
+      }
+      trades.push({ type:'BUY', price: lastEntry, pnl: 0 });
+    }
+
+    // Cloture - detecte via les mots cles
+    if (line.includes('CLOTURE') || line.includes('CLTURE') || 
+        (line.includes('Entree:') && line.includes('Sortie:'))) {
+      pendingWin = line.includes('Entree') ? null : line.includes('✅') || (!line.includes('❌') && line.includes('CLOTURE'));
+      pendingClose = true;
+    }
+
+    // P&L sur la ligne qui suit une cloture
+    if (pendingClose && line.includes('P&L:')) {
+      const pm = line.match(/P&L:\s*([+-]?[\d.]+)/);
+      if (pm) {
+        const pnl = parseFloat(pm[1]);
+        trades.push({ type: pnl >= 0 ? 'TP' : 'SL', pnl });
+        capital = Math.round((capital + pnl) * 100) / 100;
+        pendingClose = false;
+      }
+    }
+
+    // Capitale depuis la ligne "Capital:"
+    const capM = line.match(/Capital:\s*\$([0-9.]+)/);
+    if (capM && pendingClose === false) {
+      // Ne pas ecraser si on est en train de calculer
+    }
+
+    const priceM = line.match(/Prix:\s*\$([0-9,.]+)/);
+    if (priceM) lastPrice = priceM[1];
+    const slM = line.match(/SL:\s*\$([0-9,.]+)/);
+    if (slM) lastSL = parseFloat(slM[1].replace(/,/g,''));
+    const sigM = line.match(/Signal:\s*(BUY|HOLD|SELL)/);
+    if (sigM) lastSignal = sigM[1];
+    const condM = line.match(/\((\d)\/5\)/);
+    if (condM) lastConditions = condM[1];
+    if (line.includes('[HAUSSIER]') || line.includes('HAUSSIER')) lastRegime = 'HAUSSIER';
+    if (line.includes('[BAISSIER]') || (line.includes('BAISSIER') && !line.includes('HAUSSIER'))) lastRegime = 'BAISSIER';
+    if (line.includes('[RANGE]') || (line.includes('RANGE') && !line.includes('HAUSSIER') && !line.includes('BAISSIER'))) lastRegime = 'RANGE';
+    if (line.includes('RANGE') && line.includes('HAUSSIER')) lastRegime = 'HAUSSIER';
+    if (line.includes('BAISSIER') && line.includes('bot en attente')) lastRegime = 'BAISSIER';
+    if (line.includes('RANGE') && line.includes('bot en attente')) lastRegime = 'RANGE';
+  }
+
+  // Regime depuis les lignes [REGIME]
+  for (let i = lines.length-1; i >= 0; i--) {
+    if (lines[i].includes('[BAISSIER]')) { lastRegime = 'BAISSIER'; break; }
+    if (lines[i].includes('[HAUSSIER]')) { lastRegime = 'HAUSSIER'; break; }
+    if (lines[i].includes('[RANGE]')) { lastRegime = 'RANGE'; break; }
+  }
+
+  const badge = document.getElementById('regimeBadge');
+  badge.className = 'regime-badge regime-' + lastRegime;
+  badge.textContent = { HAUSSIER:'📈 HAUSSIER', RANGE:'↔ RANGE', BAISSIER:'📉 BAISSIER' }[lastRegime];
+
+  const pnl = capital - CAPITAL_INIT;
+  const pnlPct = (pnl / CAPITAL_INIT * 100).toFixed(2);
+  const closedTrades = trades.filter(t => t.type === 'TP' || t.type === 'SL');
+  const wins = closedTrades.filter(t => t.pnl > 0);
+  const wr = closedTrades.length ? Math.round(wins.length / closedTrades.length * 100) : 0;
+
+  document.getElementById('valCapital').textContent = capital.toFixed(2) + ' €';
+  const pnlEl = document.getElementById('valPnl');
+  pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' €';
+  pnlEl.className = 'metric-value ' + (pnl >= 0 ? 'green-text' : 'red-text');
+  document.getElementById('subPnl').textContent = (pnl >= 0 ? '+' : '') + pnlPct + '%';
+  document.getElementById('valWinrate').textContent = closedTrades.length ? wr + ' %' : '— %';
+  document.getElementById('subTrades').textContent = closedTrades.length + ' trades clotures';
+  document.getElementById('tradeCount').textContent = closedTrades.length + ' trades';
+  const sigEl = document.getElementById('valSignal');
+  sigEl.textContent = lastSignal;
+  sigEl.className = 'metric-value ' + (lastSignal==='BUY'?'green-text':lastSignal==='SELL'?'red-text':'amber-text');
+  document.getElementById('subSignal').textContent = lastConditions ? lastConditions + '/5 conditions' : 'En attente';
+
+  const inPos = trades.length && trades[trades.length-1].type === 'BUY';
+  if (inPos && lastEntry && lastSL) {
+    const curPrice = parseFloat((lastPrice||'0').replace(/,/g,''));
+    const range = lastEntry * 1.06 - lastSL;
+    const pct = Math.min(100, Math.max(0, (curPrice - lastSL) / range * 100));
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressFill').style.background = pct > 50 ? 'var(--green)' : 'var(--amber)';
+  }
+
+  const condNum = parseInt(lastConditions) || 0;
+  ['cTrend','cRSI','cMACD','cVol','cEMA'].forEach((id,i) => {
+    document.getElementById(id).className = 'cond' + (i < condNum ? ' active' : '');
+  });
+
+  document.getElementById('tradesList').innerHTML = closedTrades.length
+    ? closedTrades.slice(-6).reverse().map(t => {
+        const icon = t.type==='TP' ? '◆' : '▼';
+        const cls = t.type==='TP' ? 'sell-tp' : 'sell-sl';
+        const pnlCls = t.pnl>0?'pnl-pos':t.pnl<0?'pnl-neg':'pnl-neu';
+        const label = t.type==='TP' ? 'TAKE PROFIT' : 'STOP LOSS';
+        return '<div class="trade-item"><div class="trade-left"><div class="trade-icon '+cls+'">'+icon+'</div><div class="trade-info"><div class="trade-price">'+label+'</div></div></div><div class="trade-pnl '+pnlCls+'">'+(t.pnl>=0?'+':'')+t.pnl.toFixed(2)+' €</div></div>';
+      }).join('')
+    : '<div class="empty">Aucun trade cloture</div>';
+
+  const logLines = lines.slice(-60).map(l => {
+    const esc = l.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    if (l.includes('ACHAT')) return '<div class="log-buy">'+esc+'</div>';
+    if (l.includes('CLOTURE') || l.includes('CLTURE')) return '<div class="log-sell">'+esc+'</div>';
+    if (l.includes('P&L:') && (l.includes('+') || l.includes('-'))) return '<div class="log-sell">'+esc+'</div>';
+    if (l.includes('Trailing')) return '<div class="log-trail">'+esc+'</div>';
+    if (l.includes('WARNING') || l.includes('DRAWDOWN')) return '<div class="log-warn">'+esc+'</div>';
+    return '<div>'+esc+'</div>';
+  }).join('');
+  const la = document.getElementById('logArea');
+  la.innerHTML = logLines;
+  la.scrollTop = la.scrollHeight;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch('trades.log?t=' + Date.now());
+    if (!r.ok) throw new Error('Fichier non trouvé');
+    const text = await r.text();
+    parseLog(text);
+  } catch(e) {
+    document.getElementById('lastUpdate').textContent = 'Erreur: ' + e.message;
+  }
+}
+
+// Countdown timer
+function startCountdown() {
+  countdown = 30;
+  const interval = setInterval(() => {
+    countdown--;
+    document.getElementById('nextRefresh').textContent = `Actualisation dans ${countdown}s`;
+    if (countdown <= 0) {
+      clearInterval(interval);
+      refresh().then(startCountdown);
+    }
+  }, 1000);
+}
+
+refresh().then(startCountdown);
+</script>
+</body>
+</html>
