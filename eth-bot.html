@@ -149,155 +149,99 @@
 const CAPITAL_INIT = 54.0;
 let countdown = 30;
 
-function parseLog(text) {
-  const lines = text.split('\n').filter(l => l.trim());
-  document.getElementById('logCount').textContent = lines.length + ' lignes';
-  document.getElementById('lastUpdate').textContent = 'Mis a jour · ' + new Date().toLocaleTimeString('fr-FR');
-
-  let capital = CAPITAL_INIT;
-  let lastSignal = 'HOLD';
-  let lastConditions = '0';
-  let lastRegime = 'RANGE';
-  let lastPrice = '';
-  let lastEntry = 0, lastSL = 0;
-  const trades = [];
-  let pendingClose = false;
-  let pendingWin = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-
-    // Achat - ligne du header
-    if (line.includes('ACHAT') && line.includes('ETHUSDT')) {
-      pendingClose = false;
-      // Cherche le prix sur la ligne suivante (Entree : $X)
-      for (let j = i+1; j < Math.min(i+5, lines.length); j++) {
-        const em = lines[j].match(/Entr.e\s*:\s*\$([0-9,.]+)/);
-        if (em) { lastEntry = parseFloat(em[1].replace(/,/g,'')); break; }
-      }
-      trades.push({ type:'BUY', price: lastEntry, pnl: 0 });
-    }
-
-    // Cloture - detecte via les mots cles
-    if (line.includes('CLOTURE') || line.includes('CLTURE') || 
-        (line.includes('Entree:') && line.includes('Sortie:'))) {
-      pendingWin = line.includes('Entree') ? null : line.includes('✅') || (!line.includes('❌') && line.includes('CLOTURE'));
-      pendingClose = true;
-    }
-
-    // P&L sur la ligne qui suit une cloture
-    if (pendingClose && line.includes('P&L:')) {
-      const pm = line.match(/P&L:\s*([+-]?[\d.]+)/);
-      if (pm) {
-        const pnl = parseFloat(pm[1]);
-        trades.push({ type: pnl >= 0 ? 'TP' : 'SL', pnl });
-        capital = Math.round((capital + pnl) * 100) / 100;
-        pendingClose = false;
-      }
-    }
-
-    // Capitale depuis la ligne "Capital:"
-    const capM = line.match(/Capital:\s*\$([0-9.]+)/);
-    if (capM && pendingClose === false) {
-      // Ne pas ecraser si on est en train de calculer
-    }
-
-    const priceM = line.match(/Prix:\s*\$([0-9,.]+)/);
-    if (priceM) lastPrice = priceM[1];
-    const slM = line.match(/SL:\s*\$([0-9,.]+)/);
-    if (slM) lastSL = parseFloat(slM[1].replace(/,/g,''));
-    const sigM = line.match(/Signal:\s*(BUY|HOLD|SELL)/);
-    if (sigM) lastSignal = sigM[1];
-    const condM = line.match(/\((\d)\/5\)/);
-    if (condM) lastConditions = condM[1];
-    if (line.includes('[HAUSSIER]') || line.includes('HAUSSIER')) lastRegime = 'HAUSSIER';
-    if (line.includes('[BAISSIER]') || (line.includes('BAISSIER') && !line.includes('HAUSSIER'))) lastRegime = 'BAISSIER';
-    if (line.includes('[RANGE]') || (line.includes('RANGE') && !line.includes('HAUSSIER') && !line.includes('BAISSIER'))) lastRegime = 'RANGE';
-    if (line.includes('RANGE') && line.includes('HAUSSIER')) lastRegime = 'HAUSSIER';
-    if (line.includes('BAISSIER') && line.includes('bot en attente')) lastRegime = 'BAISSIER';
-    if (line.includes('RANGE') && line.includes('bot en attente')) lastRegime = 'RANGE';
-  }
-
-  // Regime depuis les lignes [REGIME]
-  for (let i = lines.length-1; i >= 0; i--) {
-    if (lines[i].includes('[BAISSIER]')) { lastRegime = 'BAISSIER'; break; }
-    if (lines[i].includes('[HAUSSIER]')) { lastRegime = 'HAUSSIER'; break; }
-    if (lines[i].includes('[RANGE]')) { lastRegime = 'RANGE'; break; }
-  }
-
-  const badge = document.getElementById('regimeBadge');
-  badge.className = 'regime-badge regime-' + lastRegime;
-  badge.textContent = { HAUSSIER:'📈 HAUSSIER', RANGE:'↔ RANGE', BAISSIER:'📉 BAISSIER' }[lastRegime];
-
-  const pnl = capital - CAPITAL_INIT;
-  const pnlPct = (pnl / CAPITAL_INIT * 100).toFixed(2);
-  const closedTrades = trades.filter(t => t.type === 'TP' || t.type === 'SL');
-  const wins = closedTrades.filter(t => t.pnl > 0);
-  const wr = closedTrades.length ? Math.round(wins.length / closedTrades.length * 100) : 0;
-
-  document.getElementById('valCapital').textContent = capital.toFixed(2) + ' €';
-  const pnlEl = document.getElementById('valPnl');
-  pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' €';
-  pnlEl.className = 'metric-value ' + (pnl >= 0 ? 'green-text' : 'red-text');
-  document.getElementById('subPnl').textContent = (pnl >= 0 ? '+' : '') + pnlPct + '%';
-  document.getElementById('valWinrate').textContent = closedTrades.length ? wr + ' %' : '— %';
-  document.getElementById('subTrades').textContent = closedTrades.length + ' trades clotures';
-  document.getElementById('tradeCount').textContent = closedTrades.length + ' trades';
-  const sigEl = document.getElementById('valSignal');
-  sigEl.textContent = lastSignal;
-  sigEl.className = 'metric-value ' + (lastSignal==='BUY'?'green-text':lastSignal==='SELL'?'red-text':'amber-text');
-  document.getElementById('subSignal').textContent = lastConditions ? lastConditions + '/5 conditions' : 'En attente';
-
-  const inPos = trades.length && trades[trades.length-1].type === 'BUY';
-  if (inPos && lastEntry && lastSL) {
-    const curPrice = parseFloat((lastPrice||'0').replace(/,/g,''));
-    const range = lastEntry * 1.06 - lastSL;
-    const pct = Math.min(100, Math.max(0, (curPrice - lastSL) / range * 100));
-    document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('progressFill').style.background = pct > 50 ? 'var(--green)' : 'var(--amber)';
-  }
-
-  const condNum = parseInt(lastConditions) || 0;
-  ['cTrend','cRSI','cMACD','cVol','cEMA'].forEach((id,i) => {
-    document.getElementById(id).className = 'cond' + (i < condNum ? ' active' : '');
-  });
-
-  document.getElementById('tradesList').innerHTML = closedTrades.length
-    ? closedTrades.slice(-6).reverse().map(t => {
-        const icon = t.type==='TP' ? '◆' : '▼';
-        const cls = t.type==='TP' ? 'sell-tp' : 'sell-sl';
-        const pnlCls = t.pnl>0?'pnl-pos':t.pnl<0?'pnl-neg':'pnl-neu';
-        const label = t.type==='TP' ? 'TAKE PROFIT' : 'STOP LOSS';
-        return '<div class="trade-item"><div class="trade-left"><div class="trade-icon '+cls+'">'+icon+'</div><div class="trade-info"><div class="trade-price">'+label+'</div></div></div><div class="trade-pnl '+pnlCls+'">'+(t.pnl>=0?'+':'')+t.pnl.toFixed(2)+' €</div></div>';
-      }).join('')
-    : '<div class="empty">Aucun trade cloture</div>';
-
-  const logLines = lines.slice(-60).map(l => {
-    const esc = l.replace(/&/g,'&amp;').replace(/</g,'&lt;');
-    if (l.includes('ACHAT')) return '<div class="log-buy">'+esc+'</div>';
-    if (l.includes('CLOTURE') || l.includes('CLTURE')) return '<div class="log-sell">'+esc+'</div>';
-    if (l.includes('P&L:') && (l.includes('+') || l.includes('-'))) return '<div class="log-sell">'+esc+'</div>';
-    if (l.includes('Trailing')) return '<div class="log-trail">'+esc+'</div>';
-    if (l.includes('WARNING') || l.includes('DRAWDOWN')) return '<div class="log-warn">'+esc+'</div>';
-    return '<div>'+esc+'</div>';
-  }).join('');
-  const la = document.getElementById('logArea');
-  la.innerHTML = logLines;
-  la.scrollTop = la.scrollHeight;
-}
-
 async function refresh() {
   try {
-    const r = await fetch('eth-trades.log?t=' + Date.now());
-    if (!r.ok) throw new Error('Fichier non trouvé');
-    const text = await r.text();
-    parseLog(text);
+    // 1. Récupération des métriques structurées depuis JSON
+    const stateRes = await fetch('state.json?t=' + Date.now());
+    if (!stateRes.ok) throw new Error('Fichier d\'état inaccessible');
+    const state = await stateRes.json();
+
+    document.getElementById('lastUpdate').textContent = 'Mis à jour · ' + new Date().toLocaleTimeString('fr-FR');
+
+    // Mise à jour des cartes principales
+    const pnl = state.capital - CAPITAL_INIT;
+    const pnlPct = (pnl / CAPITAL_INIT * 100).toFixed(2);
+    const wr = state.total_trades > 0 ? Math.round((state.winning_trades / state.total_trades) * 100) : 0;
+
+    document.getElementById('valCapital').textContent = state.capital.toFixed(2) + ' €';
+    
+    const pnlEl = document.getElementById('valPnl');
+    pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' €';
+    pnlEl.className = 'metric-value ' + (pnl >= 0 ? 'green-text' : 'red-text');
+    document.getElementById('subPnl').textContent = (pnl >= 0 ? '+' : '') + pnlPct + '%';
+    
+    document.getElementById('valWinrate').textContent = state.total_trades > 0 ? wr + ' %' : '— %';
+    document.getElementById('subTrades').textContent = state.total_trades + ' trades clôturés';
+    document.getElementById('tradeCount').textContent = state.total_trades + ' trades';
+
+    // Mise à jour du signal et du régime
+    const sigEl = document.getElementById('valSignal');
+    sigEl.textContent = state.last_signal || 'HOLD';
+    sigEl.className = 'metric-value ' + (state.last_signal === 'BUY' ? 'green-text' : state.last_signal === 'SELL' ? 'red-text' : 'amber-text');
+    document.getElementById('subSignal').textContent = state.last_conditions ? state.last_conditions + '/5 conditions' : 'En attente';
+
+    const badge = document.getElementById('regimeBadge');
+    badge.className = 'regime-badge regime-' + state.regime;
+    const regimeLabels = { HAUSSIER: '📈 HAUSSIER', RANGE: '↔ RANGE', BAISSIER: '📉 BAISSIER' };
+    badge.textContent = regimeLabels[state.regime] || 'INCONNU';
+
+    // Mise à jour des conditions actives
+    const condNum = parseInt(state.last_conditions) || 0;
+    ['cTrend','cRSI','cMACD','cVol','cEMA'].forEach((id, i) => {
+      document.getElementById(id).className = 'cond' + (i < condNum ? ' active' : '');
+    });
+
+    // Rendu de l'historique des trades
+    const tradesHtml = state.trade_history && state.trade_history.length > 0 
+      ? state.trade_history.slice().reverse().map(t => {
+          const icon = t.type === 'TP' ? '◆' : '▼';
+          const cls = t.type === 'TP' ? 'sell-tp' : 'sell-sl';
+          const pnlCls = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : 'pnl-neu';
+          const label = t.type === 'TP' ? 'TAKE PROFIT' : 'STOP LOSS';
+          return `<div class="trade-item"><div class="trade-left"><div class="trade-icon ${cls}">${icon}</div><div class="trade-info"><div class="trade-price">${label}</div></div></div><div class="trade-pnl ${pnlCls}">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} €</div></div>`;
+        }).join('')
+      : '<div class="empty">Aucun trade clôturé</div>';
+    document.getElementById('tradesList').innerHTML = tradesHtml;
+
+    // Mise à jour de la barre de progression si en position
+    if (state.in_position && state.entry_price && state.stop_loss) {
+      const curPrice = state.latest_price || state.entry_price;
+      const range = state.entry_price * 1.06 - state.stop_loss;
+      const pct = Math.min(100, Math.max(0, (curPrice - state.stop_loss) / range * 100));
+      const progressFill = document.getElementById('progressFill');
+      progressFill.style.width = pct + '%';
+      progressFill.style.background = pct > 50 ? 'var(--green)' : 'var(--amber)';
+    } else {
+      document.getElementById('progressFill').style.width = '0%';
+    }
+
+    // 2. Récupération optionnelle du fichier de log pour l'affichage visuel uniquement
+    const logRes = await fetch('eth-trades.log?t=' + Date.now());
+    if (logRes.ok) {
+      const text = await logRes.text();
+      const lines = text.split('\n').filter(l => l.trim());
+      document.getElementById('logCount').textContent = lines.length + ' lignes';
+      
+      const logLinesHtml = lines.slice(-60).map(l => {
+        const esc = l.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        if (l.includes('ACHAT')) return `<div class="log-buy">${esc}</div>`;
+        if (l.includes('CLOTURE') || l.includes('CLTURE')) return `<div class="log-sell">${esc}</div>`;
+        if (l.includes('P&L:') && (l.includes('+') || l.includes('-'))) return `<div class="log-sell">${esc}</div>`;
+        if (l.includes('Trailing')) return `<div class="log-trail">${esc}</div>`;
+        if (l.includes('WARNING') || l.includes('DRAWDOWN')) return `<div class="log-warn">${esc}</div>`;
+        return `<div>${esc}</div>`;
+      }).join('');
+      
+      const la = document.getElementById('logArea');
+      la.innerHTML = logLinesHtml;
+      la.scrollTop = la.scrollHeight;
+    }
+
   } catch(e) {
-    document.getElementById('lastUpdate').textContent = 'Erreur: ' + e.message;
+    document.getElementById('lastUpdate').textContent = 'Erreur technique de liaison réseau';
   }
 }
 
-// Countdown timer
 function startCountdown() {
   countdown = 30;
   const interval = setInterval(() => {

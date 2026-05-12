@@ -4,13 +4,15 @@ ETH/USDT Trading Bot v3.1 — Version finale
 Corrections : Détecteur régime · ATR adaptatif · BTC graduel · Reset heure locale Argentine
 """
 
+import os
 import time, json, logging, requests
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import pandas as pd
 import numpy as np
+from dotenv import load_dotenv
 
-# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+load_dotenv()
 
 CONFIG = {
     "symbol":           "ETHUSDT",
@@ -20,23 +22,19 @@ CONFIG = {
     "lookback":         100,
     "interval_fast":    "1h",
     "interval_slow":    "4h",
-    "max_drawdown_pct": 0.10,       # Pause si -10% dans la journée
-    "max_total_loss":   0.15,       # Pause si -15% depuis le départ
-    "atr_range_pct":    0.010,      # CORRIGÉ : seuil relevé à 1% pour mieux détecter le range
-    "timezone_offset":  -3,         # CORRIGÉ : Argentine = UTC-3
+    "max_drawdown_pct": 0.10,
+    "max_total_loss":   0.15,
+    "atr_range_pct":    0.010,
+    "timezone_offset":  -3,
     "paper_trading":    True,
 
-    # Telegram
-    "telegram_token":   "8747032701:AAF5gAop7o8U88zEJMNtSJsZrIY8X9kI0YM",
-    "telegram_chat_id": "5488337343",
+    "telegram_token":   os.getenv("TELEGRAM_TOKEN", ""),
+    "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
+    "api_key":          os.getenv("BINANCE_API_KEY", ""),
+    "api_secret":       os.getenv("BINANCE_API_SECRET", ""),
 
-    # Fichiers
     "state_file":       "state.json",
     "log_file":         "eth-trades.log",
-
-    # API Binance
-    "api_key":          "",
-    "api_secret":       "",
 }
 
 # ─── STRATÉGIES ───────────────────────────────────────────────────────────────
@@ -107,6 +105,8 @@ def load_state():
     if state_path.exists():
         with open(state_path) as f:
             s = json.load(f)
+        if "trade_history" not in s:
+            s["trade_history"] = []
         log.info(f"Reprise — capital: {s['capital']:.2f} USDT | régime: {s.get('regime','?')} | position: {s['in_position']}")
         return s
     return {
@@ -122,10 +122,14 @@ def load_state():
         "winning_trades":  0,
         "total_pnl":       0.0,
         "day_pnl":         0.0,
-        "last_reset_date": local_today(),   # CORRIGÉ : heure locale Argentine
+        "last_reset_date": local_today(),
         "paused_until":    None,
         "last_atr":        None,
         "started_at":      local_now().isoformat(),
+        "trade_history":   [],
+        "last_signal":     "HOLD",
+        "last_conditions": 0,
+        "latest_price":    0.0
     }
 
 def save_state(s):
@@ -370,6 +374,18 @@ def close_long(state, price, reason):
     if pnl > 0:
         state["winning_trades"] += 1
 
+    # --- NOUVEAU BLOC : Ajout du trade à l'historique JSON ---
+    state["trade_history"].append({
+        "type": "TP" if pnl >= 0 else "SL",
+        "pnl": pnl,
+        "entry": entry,
+        "exit": price,
+        "date": local_now().isoformat()
+    })
+    # Conservation des 10 derniers trades uniquement
+    state["trade_history"] = state["trade_history"][-10:]
+    # ---------------------------------------------------------
+
     wr   = round(state["winning_trades"] / state["total_trades"] * 100, 1)
     icon = "✅" if pnl > 0 else "❌"
 
@@ -430,10 +446,10 @@ def check_drawdown(state) -> bool:
 
 def run():
     log.info("━" * 55)
-    log.info("  ETH/USDT Bot v3.1 — Version finale")
-    log.info("  Régime · ATR adaptatif · BTC graduel · Heure locale")
+    log.info("  ETH/USDT Bot v3.2 — Architecture API JSON")
+    log.info("  Regroupement des métriques pour Dashboard optimisé")
     log.info("━" * 55)
-    tg("🚀 <b>Bot v3.1 démarré</b>\nVersion finale · Toutes corrections appliquées")
+    tg("🚀 <b>Bot v3.2 démarré</b>\nMode API JSON activé pour le Dashboard")
 
     state = load_state()
     save_state(state)
@@ -448,7 +464,7 @@ def run():
                 time.sleep(CONFIG["check_interval"])
                 continue
 
-            # Détection régime toutes les 4h
+            # 1. Détection du régime (toutes les 4h environ)
             if regime_counter % 240 == 0:
                 df_4h = get_klines(CONFIG["symbol"], CONFIG["interval_slow"], CONFIG["lookback"])
                 if not df_4h.empty:
@@ -456,13 +472,13 @@ def run():
                     if new_regime != state["regime"]:
                         old = state["regime"]
                         state["regime"] = new_regime
-                        log.info(f"🔄 Régime: {old} → {new_regime} | {STRATEGIES[new_regime]['description']}")
-                        tg(f"🔄 <b>Régime: {old} → {new_regime}</b>\n{STRATEGIES[new_regime]['description']}")
+                        log.info(f"🔄 Régime: {old} → {new_regime}")
+                        tg(f"🔄 <b>Régime: {old} → {new_regime}</b>")
             regime_counter += 1
 
             strategy = STRATEGIES[state["regime"]]
 
-            # Données 1H
+            # 2. Récupération des données et Analyse
             df = get_klines(CONFIG["symbol"], CONFIG["interval_fast"], CONFIG["lookback"])
             if df.empty:
                 log.warning("Données vides, retry 60s...")
@@ -478,15 +494,19 @@ def run():
                 time.sleep(60)
                 continue
 
+            # --- MISE À JOUR DES MÉTRIQUES POUR LE DASHBOARD ---
+            state["latest_price"] = price
+            state["last_signal"] = analysis["signal"]
+            state["last_conditions"] = analysis["conditions"]
+            # ---------------------------------------------------
+
             log.info(
                 f"[{state['regime']}] ${price:,.2f} | "
                 f"EMA {analysis['ema_fast']}/{analysis['ema_slow']} | "
-                f"RSI: {analysis['rsi']} | MACD: {analysis['macd_h']:+.3f} | "
-                f"ATR: {analysis['atr']} | "
-                f"Signal: {analysis['signal']} ({analysis['conditions']}/5)"
+                f"RSI: {analysis['rsi']} | Signal: {analysis['signal']} ({analysis['conditions']}/5)"
             )
 
-            # Position ouverte
+            # 3. Gestion de la position ouverte
             if state["in_position"]:
                 update_trailing(state, price, strategy)
                 sl = state["stop_loss"]
@@ -499,9 +519,9 @@ def run():
                     close_long(state, price, f"TAKE-PROFIT ${tp:,.2f}")
                 else:
                     pnl_live = round((price - state["entry_price"]) * state["qty"], 4)
-                    log.info(f"Position | P&L live: {'+' if pnl_live>=0 else ''}{pnl_live:.4f} | SL: ${sl:,.2f} | Haut: ${state['highest_price']:,.2f}")
+                    log.info(f"Position | P&L live: {'+' if pnl_live>=0 else ''}{pnl_live:.4f} | SL: ${sl:,.2f}")
 
-            # Cherche un signal
+            # 4. Logique d'entrée (si pas de position)
             else:
                 if state["regime"] in ("BAISSIER", "RANGE"):
                     log.info(f"Marché {state['regime']} — bot en attente")
@@ -517,17 +537,13 @@ def run():
                 else:
                     log.info(f"{analysis['reason']}")
 
+            # Sauvegarde de l'état (données lues par le Dashboard)
             save_state(state)
 
-        except KeyboardInterrupt:
-            log.info("Arrêt manuel. État sauvegardé.")
-            tg("🔴 <b>Bot arrêté manuellement</b>")
-            save_state(state)
-            break
         except Exception as e:
-            log.error(f"Erreur inattendue: {e}")
+            log.error(f"Erreur boucle: {e}")
+            time.sleep(10) # Petite pause en cas d'erreur réseau
 
         time.sleep(CONFIG["check_interval"])
-
 if __name__ == "__main__":
     run()
