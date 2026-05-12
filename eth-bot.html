@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ETH Bot Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
   :root {
@@ -36,39 +37,33 @@
   .metric-value { font-size:1.9rem; font-weight:800; letter-spacing:-0.02em; }
   .metric-sub { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; font-family:'JetBrains Mono',monospace; }
   .green-text { color:var(--green); } .red-text { color:var(--red); } .amber-text { color:var(--amber); }
-  .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.5rem; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.5rem; margin-bottom: 1.5rem; }
   .card-title { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:1.25rem; font-family:'JetBrains Mono',monospace; }
-  .trade-item { display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; animation:fadeIn 0.3s ease; }
+  .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .trade-item { display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; }
   .trade-item:last-child { border:none; }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
   .trade-left { display:flex; align-items:center; gap:10px; }
   .trade-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
-  .trade-icon.buy { background:rgba(16,185,129,0.15); }
-  .trade-icon.sell-tp { background:rgba(124,58,237,0.15); }
-  .trade-icon.sell-sl { background:rgba(239,68,68,0.15); }
+  .trade-icon.sell-tp { background:rgba(16,185,129,0.15); color: var(--green); }
+  .trade-icon.sell-sl { background:rgba(239,68,68,0.15); color: var(--red); }
   .trade-info { font-family:'JetBrains Mono',monospace; }
-  .trade-type { font-size:0.75rem; color:var(--muted); }
   .trade-price { font-size:0.85rem; font-weight:500; }
   .trade-pnl { font-family:'JetBrains Mono',monospace; font-size:0.9rem; font-weight:700; padding:3px 10px; border-radius:6px; }
   .pnl-pos { background:rgba(16,185,129,0.1); color:var(--green); }
   .pnl-neg { background:rgba(239,68,68,0.1); color:var(--red); }
-  .pnl-neu { background:rgba(100,116,139,0.1); color:var(--muted); }
   .progress-section { margin-top:1.5rem; }
   .progress-label { display:flex; justify-content:space-between; font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem; font-family:'JetBrains Mono',monospace; }
   .progress-bar { height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
   .progress-fill { height:100%; border-radius:3px; transition:width 1s ease; }
-  .conditions { display:flex; gap:8px; flex-wrap:wrap; margin-top:1rem; }
-  .cond { padding:4px 12px; border-radius:6px; font-size:0.72rem; font-family:'JetBrains Mono',monospace; border:1px solid var(--border); color:var(--muted); }
-  .cond.active { border-color:var(--green); color:var(--green); background:rgba(16,185,129,0.08); }
-  .log-area { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:1rem; max-height:220px; overflow-y:auto; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); line-height:1.8; }
+  .log-area { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:1rem; height: 250px; overflow-y:auto; font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); line-height:1.8; }
   .log-area .log-buy { color:var(--green); }
   .log-area .log-sell { color:var(--red); }
   .log-area .log-trail { color:var(--accent); }
   .log-area .log-warn { color:var(--amber); }
-  .refresh-info { font-size:0.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; margin-top:0.5rem; }
   .empty { color:var(--muted); font-size:0.85rem; text-align:center; padding:2rem; font-family:'JetBrains Mono',monospace; }
-  @media(max-width:768px) { .metrics{grid-template-columns:repeat(2,1fr);} .bottom-grid{grid-template-columns:1fr;} body{padding:1rem;} }
+  
+  /* Container specifique pour le graphique */
+  #tvchart { width: 100%; height: 350px; border-radius: 8px; overflow: hidden; }
 </style>
 </head>
 <body>
@@ -76,9 +71,8 @@
   <div class="header">
     <div class="header-left">
       <h1>ETH <span>Bot</span> Dashboard</h1>
-      <p>ETHUSDT · Paper Trading · v3.0</p>
+      <p>ETHUSDT · Architecture API JSON</p>
       <div class="live-dot"><div class="dot"></div><span id="lastUpdate">Chargement...</span></div>
-      <div class="refresh-info" id="nextRefresh">Actualisation dans 30s</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
       <div id="regimeBadge" class="regime-badge regime-RANGE">↔ RANGE</div>
@@ -108,73 +102,97 @@
     </div>
   </div>
 
+  <div class="card">
+    <div class="card-title">Graphique ETH/USDT (Données Binance 1H)</div>
+    <div id="tvchart"></div>
+  </div>
+
   <div class="bottom-grid">
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Historique des trades</span>
+        <span>Derniers Trades Clôturés</span>
         <span id="tradeCount" style="color:var(--accent);">0 trades</span>
       </div>
-      <div id="tradesList"><div class="empty">Chargement automatique...</div></div>
+      <div id="tradesList"><div class="empty">Chargement...</div></div>
       <div class="progress-section">
         <div class="progress-label">
-          <span class="red-text">SL</span><span>Position</span><span class="green-text">TP</span>
+          <span class="red-text">SL</span><span>Position Actuelle</span><span class="green-text">TP / Actuel</span>
         </div>
         <div class="progress-bar">
-          <div class="progress-fill" id="progressFill" style="width:50%;background:var(--accent);"></div>
+          <div class="progress-fill" id="progressFill" style="width:0%;background:var(--accent);"></div>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;">
-        <span>Logs en direct</span>
-        <span id="logCount" style="color:var(--muted);font-size:0.7rem;">0 lignes</span>
-      </div>
-      <div id="logArea" class="log-area"><span>Chargement...</span></div>
-      <div style="margin-top:1.25rem;">
-        <div class="card-title">Conditions détectées</div>
-        <div class="conditions" id="conditions">
-          <span class="cond" id="cEMA">EMA cross</span>
-          <span class="cond" id="cRSI">RSI oversold</span>
-          <span class="cond" id="cMACD">MACD haussier</span>
-          <span class="cond" id="cVol">Volume OK</span>
-          <span class="cond" id="cTrend">Tendance</span>
-        </div>
-      </div>
+      <div class="card-title">Logs Système (Bruts)</div>
+      <div id="logArea" class="log-area"><span>Chargement des logs...</span></div>
     </div>
   </div>
 </div>
 
 <script>
 const CAPITAL_INIT = 54.0;
-let countdown = 30;
+let chart, candleSeries;
+let chartInitialized = false;
 
+// 1. Initialisation du Graphique TradingView
+async function initChart() {
+    const chartOptions = {
+        layout: { textColor: '#64748b', background: { type: 'solid', color: '#111118' } },
+        grid: { vertLines: { color: '#1e1e2e' }, horzLines: { color: '#1e1e2e' } },
+        timeScale: { timeVisible: true, secondsVisible: false, borderColor: '#1e1e2e' },
+        rightPriceScale: { borderColor: '#1e1e2e' }
+    };
+    
+    chart = LightweightCharts.createChart(document.getElementById('tvchart'), chartOptions);
+    candleSeries = chart.addCandlestickSeries({
+        upColor: '#10b981', downColor: '#ef4444', borderVisible: false,
+        wickUpColor: '#10b981', wickDownColor: '#ef4444',
+    });
+
+    // On va chercher les bougies 1H directement sur Binance
+    try {
+        const res = await fetch('https://api.binance.com/api/v3/klines?symbol=ETHUSDT&interval=1h&limit=150');
+        const data = await res.json();
+        const formattedData = data.map(d => ({
+            time: d[0] / 1000,
+            open: parseFloat(d[1]),
+            high: parseFloat(d[2]),
+            low: parseFloat(d[3]),
+            close: parseFloat(d[4])
+        }));
+        candleSeries.setData(formattedData);
+        chartInitialized = true;
+    } catch(e) { 
+        console.error('Erreur API Binance:', e); 
+    }
+}
+
+// 2. Récupération des données du Bot (state.json)
 async function refresh() {
   try {
-    // 1. Récupération des métriques structurées depuis JSON
     const stateRes = await fetch('state.json?t=' + Date.now());
-    if (!stateRes.ok) throw new Error('Fichier d\'état inaccessible');
+    if (!stateRes.ok) throw new Error('Fichier state.json introuvable');
     const state = await stateRes.json();
 
     document.getElementById('lastUpdate').textContent = 'Mis à jour · ' + new Date().toLocaleTimeString('fr-FR');
 
-    // Mise à jour des cartes principales
+    // Stats
     const pnl = state.capital - CAPITAL_INIT;
     const pnlPct = (pnl / CAPITAL_INIT * 100).toFixed(2);
     const wr = state.total_trades > 0 ? Math.round((state.winning_trades / state.total_trades) * 100) : 0;
 
     document.getElementById('valCapital').textContent = state.capital.toFixed(2) + ' €';
-    
     const pnlEl = document.getElementById('valPnl');
     pnlEl.textContent = (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + ' €';
     pnlEl.className = 'metric-value ' + (pnl >= 0 ? 'green-text' : 'red-text');
     document.getElementById('subPnl').textContent = (pnl >= 0 ? '+' : '') + pnlPct + '%';
-    
     document.getElementById('valWinrate').textContent = state.total_trades > 0 ? wr + ' %' : '— %';
     document.getElementById('subTrades').textContent = state.total_trades + ' trades clôturés';
     document.getElementById('tradeCount').textContent = state.total_trades + ' trades';
 
-    // Mise à jour du signal et du régime
+    // Signal & Régime
     const sigEl = document.getElementById('valSignal');
     sigEl.textContent = state.last_signal || 'HOLD';
     sigEl.className = 'metric-value ' + (state.last_signal === 'BUY' ? 'green-text' : state.last_signal === 'SELL' ? 'red-text' : 'amber-text');
@@ -185,28 +203,22 @@ async function refresh() {
     const regimeLabels = { HAUSSIER: '📈 HAUSSIER', RANGE: '↔ RANGE', BAISSIER: '📉 BAISSIER' };
     badge.textContent = regimeLabels[state.regime] || 'INCONNU';
 
-    // Mise à jour des conditions actives
-    const condNum = parseInt(state.last_conditions) || 0;
-    ['cTrend','cRSI','cMACD','cVol','cEMA'].forEach((id, i) => {
-      document.getElementById(id).className = 'cond' + (i < condNum ? ' active' : '');
-    });
-
-    // Rendu de l'historique des trades
+    // Historique des trades
     const tradesHtml = state.trade_history && state.trade_history.length > 0 
       ? state.trade_history.slice().reverse().map(t => {
           const icon = t.type === 'TP' ? '◆' : '▼';
           const cls = t.type === 'TP' ? 'sell-tp' : 'sell-sl';
           const pnlCls = t.pnl > 0 ? 'pnl-pos' : t.pnl < 0 ? 'pnl-neg' : 'pnl-neu';
           const label = t.type === 'TP' ? 'TAKE PROFIT' : 'STOP LOSS';
-          return `<div class="trade-item"><div class="trade-left"><div class="trade-icon ${cls}">${icon}</div><div class="trade-info"><div class="trade-price">${label}</div></div></div><div class="trade-pnl ${pnlCls}">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} €</div></div>`;
+          return `<div class="trade-item"><div class="trade-left"><div class="trade-icon ${cls}">${icon}</div><div class="trade-info"><div class="trade-price">${label}</div><div style="font-size:0.7rem; color:var(--muted)">Sortie: $${t.exit.toFixed(2)}</div></div></div><div class="trade-pnl ${pnlCls}">${t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} €</div></div>`;
         }).join('')
       : '<div class="empty">Aucun trade clôturé</div>';
     document.getElementById('tradesList').innerHTML = tradesHtml;
 
-    // Mise à jour de la barre de progression si en position
+    // Position en cours (Barre de progression)
     if (state.in_position && state.entry_price && state.stop_loss) {
       const curPrice = state.latest_price || state.entry_price;
-      const range = state.entry_price * 1.06 - state.stop_loss;
+      const range = (state.highest_price || state.entry_price) * 1.05 - state.stop_loss; 
       const pct = Math.min(100, Math.max(0, (curPrice - state.stop_loss) / range * 100));
       const progressFill = document.getElementById('progressFill');
       progressFill.style.width = pct + '%';
@@ -215,46 +227,54 @@ async function refresh() {
       document.getElementById('progressFill').style.width = '0%';
     }
 
-    // 2. Récupération optionnelle du fichier de log pour l'affichage visuel uniquement
+    // --- MISE À JOUR DES MARQUEURS SUR LE GRAPHIQUE ---
+    if (chartInitialized && state.trade_history) {
+        const markers = [];
+        state.trade_history.forEach(trade => {
+            if (trade.date) {
+                // Convertir la date ISO en Timestamp UNIX pour TradingView
+                const tradeTime = Math.floor(new Date(trade.date).getTime() / 1000);
+                if (trade.type === 'TP') {
+                    markers.push({ time: tradeTime, position: 'aboveBar', color: '#10b981', shape: 'arrowDown', text: 'TP +' + trade.pnl.toFixed(2) });
+                } else {
+                    markers.push({ time: tradeTime, position: 'belowBar', color: '#ef4444', shape: 'arrowUp', text: 'SL ' + trade.pnl.toFixed(2) });
+                }
+            }
+        });
+        // Trier les marqueurs par date chronologique (obligatoire pour TradingView)
+        markers.sort((a, b) => a.time - b.time);
+        candleSeries.setMarkers(markers);
+    }
+
+    // 3. Logs Bruts (Optionnel, juste pour garder une trace visuelle)
     const logRes = await fetch('eth-trades.log?t=' + Date.now());
     if (logRes.ok) {
       const text = await logRes.text();
       const lines = text.split('\n').filter(l => l.trim());
-      document.getElementById('logCount').textContent = lines.length + ' lignes';
-      
-      const logLinesHtml = lines.slice(-60).map(l => {
+      const logLinesHtml = lines.slice(-40).map(l => {
         const esc = l.replace(/&/g,'&amp;').replace(/</g,'&lt;');
         if (l.includes('ACHAT')) return `<div class="log-buy">${esc}</div>`;
-        if (l.includes('CLOTURE') || l.includes('CLTURE')) return `<div class="log-sell">${esc}</div>`;
-        if (l.includes('P&L:') && (l.includes('+') || l.includes('-'))) return `<div class="log-sell">${esc}</div>`;
+        if (l.includes('CLÔTURE') || l.includes('CLTURE')) return `<div class="log-sell">${esc}</div>`;
         if (l.includes('Trailing')) return `<div class="log-trail">${esc}</div>`;
-        if (l.includes('WARNING') || l.includes('DRAWDOWN')) return `<div class="log-warn">${esc}</div>`;
+        if (l.includes('DRAWDOWN')) return `<div class="log-warn">${esc}</div>`;
         return `<div>${esc}</div>`;
       }).join('');
-      
       const la = document.getElementById('logArea');
       la.innerHTML = logLinesHtml;
       la.scrollTop = la.scrollHeight;
     }
 
   } catch(e) {
-    document.getElementById('lastUpdate').textContent = 'Erreur technique de liaison réseau';
+    document.getElementById('lastUpdate').textContent = 'Erreur réseau';
+    console.error(e);
   }
 }
 
-function startCountdown() {
-  countdown = 30;
-  const interval = setInterval(() => {
-    countdown--;
-    document.getElementById('nextRefresh').textContent = `Actualisation dans ${countdown}s`;
-    if (countdown <= 0) {
-      clearInterval(interval);
-      refresh().then(startCountdown);
-    }
-  }, 1000);
-}
-
-refresh().then(startCountdown);
+// Lancement au chargement
+initChart().then(() => {
+    refresh();
+    setInterval(refresh, 15000); // Rafraîchissement automatique toutes les 15s
+});
 </script>
 </body>
 </html>
