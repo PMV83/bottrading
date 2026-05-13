@@ -114,6 +114,15 @@
   .log-error { color:var(--red); opacity:0.7; }
 
   .empty { color:var(--muted); font-size:0.85rem; text-align:center; padding:2rem; font-family:'JetBrains Mono',monospace; }
+
+  /* ── Chart data badge ── */
+  .data-badge {
+    font-size:0.68rem; font-family:'JetBrains Mono',monospace;
+    color:var(--muted); display:flex; align-items:center; gap:6px;
+  }
+  .data-badge .dot-sm {
+    width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0;
+  }
 </style>
 </head>
 <body>
@@ -158,8 +167,11 @@
   <!-- ── Sélecteur de symbole + Graphique ── -->
   <div class="card">
     <div class="card-title">
-      <span>Graphique Quotidien (Alpaca Market Data)</span>
-      <span id="chartSymbolLabel" style="color:var(--accent); font-size:0.82rem;">AAPL</span>
+      <span>Graphique Quotidien (Alpaca Market Data — local)</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="data-badge"><div class="dot-sm"></div><span id="dataUpdatedAt">—</span></div>
+        <span id="chartSymbolLabel" style="color:var(--accent); font-size:0.82rem;">AAPL</span>
+      </div>
     </div>
     <div class="symbol-tabs" id="symbolTabs"></div>
     <div id="tvchart"></div>
@@ -199,7 +211,12 @@ const SYMBOLS      = ["AAPL", "MSFT", "GOOGL", "NVDA"];
 let chart, candleSeries;
 let chartReady      = false;
 let currentSymbol   = SYMBOLS[0];
-let lastTradeHashes = "";  // Pour éviter de re-setter les marqueurs inutilement
+let lastTradeHashes = "";
+
+// Cache des données de marché chargées depuis market_data.json
+// Structure : { "AAPL": [{time, open, high, low, close, volume}, ...], ... }
+let marketDataCache = {};
+let marketDataLoaded = false;
 
 // ─── INITIALISATION TRADINGVIEW ───────────────────────────────────────────────
 function initChart() {
@@ -213,7 +230,7 @@ function initChart() {
       horzLines: { color: "#1e1e2e" },
     },
     timeScale: {
-      timeVisible:    false,  // Bougies quotidiennes, date suffit
+      timeVisible:    false,
       secondsVisible: false,
       borderColor:    "#1e1e2e",
     },
@@ -222,8 +239,8 @@ function initChart() {
   });
 
   candleSeries = chart.addCandlestickSeries({
-    upColor:      "#10b981",
-    downColor:    "#ef4444",
+    upColor:       "#10b981",
+    downColor:     "#ef4444",
     borderVisible: false,
     wickUpColor:   "#10b981",
     wickDownColor: "#ef4444",
@@ -239,79 +256,90 @@ function initChart() {
     btn.onclick     = () => switchSymbol(sym);
     tabs.appendChild(btn);
   });
-
-  loadChartData(currentSymbol);
 }
 
-// ─── CHARGEMENT DES BOUGIES (API Alpaca Market Data — public endpoint) ────────
-async function loadChartData(symbol) {
+// ─── CHARGEMENT DE MARKET_DATA.JSON (généré par le backend) ──────────────────
+/**
+ * Lit market_data.json produit par alpaca_bot.py via StockHistoricalDataClient.
+ * Pas d'appel API externe, pas de proxy : on lit le fichier local.
+ */
+async function loadMarketData() {
+  try {
+    const res = await fetch("market_data.json?t=" + Date.now(), { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error("market_data.json introuvable — le bot doit être lancé au moins une fois.");
+    const data = await res.json();
+
+    marketDataCache  = data.symbols || {};
+    marketDataLoaded = true;
+
+    // Affichage de la date de dernière mise à jour dans le badge
+    if (data.updated_at) {
+      const d = new Date(data.updated_at);
+      document.getElementById("dataUpdatedAt").textContent =
+        "Données du " + d.toLocaleDateString("fr-FR") + " " + d.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+    }
+
+    return true;
+  } catch (e) {
+    console.warn("loadMarketData() :", e.message);
+    document.getElementById("dataUpdatedAt").textContent = "market_data.json introuvable";
+    return false;
+  }
+}
+
+// ─── RENDU DU GRAPHIQUE DEPUIS LE CACHE LOCAL ─────────────────────────────────
+function renderChart(symbol) {
   document.getElementById("chartSymbolLabel").textContent = symbol + " — Chargement...";
   candleSeries.setData([]);
   candleSeries.setMarkers([]);
   chartReady = false;
 
-  try {
-    /*
-     * IMPORTANT : L'API Alpaca /v2/stocks/{symbol}/bars nécessite une clé API.
-     * Pour un dashboard purement client-side (sans backend), on peut utiliser
-     * l'endpoint public Yahoo Finance (CORS autorisé via un proxy léger)
-     * ou injecter les barres via state.json enrichi par le bot.
-     *
-     * Solution retenue ici : Yahoo Finance JSON (gratuit, CORS OK via allorigins)
-     */
-    const endTs   = Math.floor(Date.now() / 1000);
-    const startTs = endTs - (365 * 24 * 3600); // 1 an de données
-    const url     = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${startTs}&period2=${endTs}&range=1y`;
-    const proxy   = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-
-    const res  = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
-    const json = await res.json();
-    const data = JSON.parse(json.contents);
-
-    const result    = data?.chart?.result?.[0];
-    const timestamps = result?.timestamp || [];
-    const ohlcv      = result?.indicators?.quote?.[0] || {};
-
-    if (!timestamps.length) throw new Error("Aucune donnée Yahoo Finance");
-
-    const candles = timestamps.map((t, i) => ({
-      time:  t,
-      open:  parseFloat((ohlcv.open[i]  || 0).toFixed(2)),
-      high:  parseFloat((ohlcv.high[i]  || 0).toFixed(2)),
-      low:   parseFloat((ohlcv.low[i]   || 0).toFixed(2)),
-      close: parseFloat((ohlcv.close[i] || 0).toFixed(2)),
-    })).filter(c => c.open > 0 && c.close > 0);
-
-    candleSeries.setData(candles);
-    chart.timeScale().fitContent();
-    chartReady = true;
-    document.getElementById("chartSymbolLabel").textContent = symbol;
-
-  } catch(e) {
-    console.error("Erreur chargement graphique :", e);
-    document.getElementById("chartSymbolLabel").textContent = symbol + " — Erreur données";
+  const candles = marketDataCache[symbol];
+  if (!candles || candles.length === 0) {
+    document.getElementById("chartSymbolLabel").textContent = symbol + " — Données absentes";
+    return;
   }
+
+  // Les bougies sont déjà triées par le backend (timestamp croissant)
+  // Lightweight Charts attend { time (timestamp Unix en secondes), open, high, low, close }
+  const chartData = candles
+    .filter(c => c.open > 0 && c.close > 0)
+    .map(c => ({
+      time:  c.time,   // Unix timestamp (secondes) — format accepté par LW Charts
+      open:  c.open,
+      high:  c.high,
+      low:   c.low,
+      close: c.close,
+    }));
+
+  candleSeries.setData(chartData);
+  chart.timeScale().fitContent();
+  chartReady = true;
+  document.getElementById("chartSymbolLabel").textContent = symbol;
 }
 
-function switchSymbol(sym) {
+async function switchSymbol(sym) {
   currentSymbol = sym;
   document.querySelectorAll(".sym-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.sym === sym);
   });
   lastTradeHashes = "";
-  loadChartData(sym);
+
+  // Si le cache est vide (market_data.json pas encore chargé), on recharge
+  if (!marketDataLoaded) {
+    await loadMarketData();
+  }
+  renderChart(sym);
 }
 
 // ─── PLACEMENT DES MARQUEURS DE TRADES ────────────────────────────────────────
 function updateMarkers(tradeHistory) {
   if (!chartReady || !tradeHistory?.length) return;
 
-  // Ne recalculer que si l'historique a changé
   const newHash = JSON.stringify(tradeHistory.map(t => t.date + t.symbol + t.type));
   if (newHash === lastTradeHashes) return;
   lastTradeHashes = newHash;
 
-  // Filtrer uniquement les trades du symbole affiché
   const markers = tradeHistory
     .filter(t => t.symbol === currentSymbol)
     .map(t => {
@@ -335,7 +363,7 @@ function updateMarkers(tradeHistory) {
         };
       }
     })
-    .sort((a, b) => a.time - b.time);  // Tri chronologique obligatoire
+    .sort((a, b) => a.time - b.time);
 
   candleSeries.setMarkers(markers);
 }
@@ -359,7 +387,7 @@ async function refresh() {
     badge.textContent  = marketLabels[regime] || regime;
 
     // ── Capital & P&L ──
-    const capital = state.capital    || CAPITAL_INIT;
+    const capital = state.capital     || CAPITAL_INIT;
     const bp      = state.buying_power || 0;
     const pnl     = capital - CAPITAL_INIT;
     const pnlPct  = (pnl / CAPITAL_INIT * 100).toFixed(2);
@@ -373,7 +401,7 @@ async function refresh() {
     document.getElementById("subPnlPct").textContent = (pnl >= 0 ? "+" : "") + pnlPct + "%";
 
     // ── Win Rate ──
-    const total   = state.total_trades || 0;
+    const total   = state.total_trades   || 0;
     const winners = state.winning_trades || 0;
     const wr      = total > 0 ? Math.round(winners / total * 100) : null;
     document.getElementById("valWinrate").textContent = wr !== null ? wr + " %" : "— %";
@@ -383,8 +411,8 @@ async function refresh() {
     const positions = state.positions || {};
     const posCount  = Object.keys(positions).length;
     document.getElementById("valPositions").textContent = posCount;
-    const lastSym   = state.last_symbol;
-    const lastSig   = state.last_signal || "HOLD";
+    const lastSym = state.last_symbol;
+    const lastSig = state.last_signal || "HOLD";
     document.getElementById("subLastSignal").textContent =
       lastSym ? `Dernier signal : ${lastSig} ${lastSym}` : "Aucun signal récent";
 
@@ -395,7 +423,7 @@ async function refresh() {
           const curPrice = latestPrices[sym] || pos.entry_price;
           const pnlLive  = ((curPrice - pos.entry_price) * pos.qty).toFixed(2);
           const pnlClass = pnlLive >= 0 ? "pnl-pos" : "pnl-neg";
-          const pnlStr   = (pnlLive >= 0 ? "+" : "") + "$" + pnlLive;
+          const pnlStr   = (pnlLive >= 0 ? "+" : "") + "$" + Math.abs(pnlLive).toFixed(2);
           const date     = pos.entry_time ? new Date(pos.entry_time).toLocaleDateString("fr-FR") : "—";
           return `
             <div class="pos-item">
@@ -460,7 +488,7 @@ async function refresh() {
 
     const logEl = document.getElementById("logArea");
     logEl.innerHTML = logHtml;
-    logEl.scrollTop = 0; // Logs inversés : le plus récent en haut
+    logEl.scrollTop = 0;
 
   } catch(e) {
     document.getElementById("lastUpdate").textContent = "Erreur — " + e.message;
@@ -469,9 +497,26 @@ async function refresh() {
 }
 
 // ─── DÉMARRAGE ────────────────────────────────────────────────────────────────
-initChart();
-refresh();
-setInterval(refresh, 15000);  // Rafraîchissement toutes les 15 secondes
+async function init() {
+  initChart();
+
+  // Chargement initial des données de marché depuis market_data.json (local)
+  await loadMarketData();
+  renderChart(currentSymbol);
+
+  // Premiers appels d'état + polling
+  await refresh();
+  setInterval(refresh, 15000);  // Rafraîchissement état toutes les 15 secondes
+
+  // Rechargement des données de marché toutes les heures
+  // (le backend les régénère une fois par jour, mais on vérifie régulièrement)
+  setInterval(async () => {
+    await loadMarketData();
+    renderChart(currentSymbol);
+  }, 3600 * 1000);
+}
+
+init();
 </script>
 </body>
 </html>
