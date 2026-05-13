@@ -371,8 +371,8 @@ function updateMarkers(tradeHistory) {
 // ─── REFRESH ÉTAT BOT (state.json) ────────────────────────────────────────────
 async function refresh() {
   try {
-    const res = await fetch("state.json?t=" + Date.now());
-    if (!res.ok) throw new Error("state.json introuvable — le bot est-il lancé ?");
+    const res = await fetch("alpaca-state.json?t=" + Date.now());
+    if (!res.ok) throw new Error("alpaca-state.json introuvable — le bot est-il lancé ?");
     const state = await res.json();
 
     // ── Timestamp ──

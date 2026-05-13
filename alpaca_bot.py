@@ -57,7 +57,7 @@ CONFIG = {
     "check_interval_sec": 900,      # Vérification toutes les 15 minutes
 
     # Fichiers
-    "state_file":       "state.json",
+    "state_file":       "alpaca-state.json",
     "market_data_file": "market_data.json",
     "log_file":         "alpaca-trades.log",
 
@@ -67,8 +67,7 @@ CONFIG = {
     # Clés API (chargées depuis .env)
     "alpaca_api_key":    os.getenv("ALPACA_API_KEY", ""),
     "alpaca_secret_key": os.getenv("ALPACA_SECRET_KEY", ""),
-    "telegram_token":    os.getenv("TELEGRAM_TOKEN", ""),
-    "telegram_chat_id":  os.getenv("TELEGRAM_CHAT_ID", ""),
+    "discord_webhook_url": os.getenv("DISCORD_WEBHOOK_URL", ""),
 }
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
@@ -275,20 +274,27 @@ def should_refresh_market_data() -> bool:
 
 # ─── TELEGRAM ─────────────────────────────────────────────────────────────────
 
-def tg(msg: str):
-    """Envoie une notification Telegram. Échoue silencieusement si non configuré."""
-    token = CONFIG["telegram_token"]
-    chat  = CONFIG["telegram_chat_id"]
-    if not token or not chat:
+# ─── DISCORD ──────────────────────────────────────────────────────────────────
+
+def discord_alert(msg: str):
+    """Envoie une notification Discord via Webhook."""
+    webhook_url = CONFIG.get("discord_webhook_url")
+    if not webhook_url:
         return
+    
+    # Nettoyage des balises HTML Telegram pour le Markdown Discord
+    msg_markdown = msg.replace('<b>', '**').replace('</b>', '**')
+    
+    data = {
+        "content": msg_markdown,
+        "username": "Alpaca Equities",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/2906/2906274.png" # Petite icône bourse
+    }
+    
     try:
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat, "text": msg, "parse_mode": "HTML"},
-            timeout=5,
-        )
+        requests.post(webhook_url, json=data, timeout=5)
     except Exception as e:
-        log.warning(f"Telegram : {e}")
+        log.warning(f"Discord : {e}")
 
 # ─── API ALPACA — MARCHÉ (via TradingClient) ──────────────────────────────────
 
@@ -572,7 +578,7 @@ def sync_positions_from_alpaca(state: dict):
         )
         log.info(msg)
         push_log(state, msg, "sell")
-        tg(
+        discord_alert(
             f"{icon} <b>CLÔTURE {sym}</b>\n"
             f"Entrée: ${entry:.2f} → Sortie: ${exit_price:.2f}\n"
             f"P&L: <b>{'+' if pnl>=0 else ''}{pnl:.2f}$</b> | {trade_type}\n"
@@ -616,7 +622,7 @@ def run():
 
     state = load_state()
     save_state(state)
-    tg("🚀 <b>Alpaca Bot démarré</b>\nStratégie: Mean Reversion (SMA200 + RSI)\nMode: Paper Trading")
+    discord_alert("🚀 <b>Alpaca Bot démarré</b>\nStratégie: Mean Reversion (SMA200 + RSI)\nMode: Paper Trading")
 
     while True:
         try:
@@ -741,7 +747,7 @@ def run():
                 log.info(msg)
                 log.info("=" * 60)
                 push_log(state, msg, "buy")
-                tg(
+                discord_alert(
                     f"🟢 <b>ACHAT {symbol}</b>\n"
                     f"Prix: <b>${price:.2f}</b> × {qty} actions\n"
                     f"SL: ${sl_price} | TP: ${tp_price}\n"
