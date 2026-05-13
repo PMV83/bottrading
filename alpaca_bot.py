@@ -670,6 +670,9 @@ def run():
                 f"BP disponible: ${buying_power:,.2f} | "
                 f"Positions: {len(state['positions'])}"
             )
+            
+            # NOUVELLE LIGNE POUR LE DASHBOARD :
+            push_log(state, f"Scan en cours... | BP dispo: ${buying_power:,.0f} | Positions: {len(state['positions'])}", "info")
 
             # ── 5. Synchronisation des positions (détection clôtures SL/TP) ───
             sync_positions_from_alpaca(state)
