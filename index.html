@@ -2,33 +2,153 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Trading Bot Hub</title>
+    <title>Trading Bot Hub — Terminal</title>
     <style>
-        body { background: #0a0a0f; color: #e2e8f0; font-family: sans-serif; padding: 2rem; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; }
-        .card { background: #111118; border: 1px solid #1e1e2e; padding: 1.5rem; border-radius: 12px; transition: 0.3s; }
-        .card:hover { border-color: #7c3aed; transform: translateY(-5px); }
-        .status { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #10b981; margin-right: 8px; }
-        h1 { margin-bottom: 2rem; font-size: 2rem; }
-        a { text-decoration: none; color: inherit; }
-        .btn { display: inline-block; margin-top: 1rem; padding: 0.5rem 1rem; background: #7c3aed; border-radius: 6px; font-weight: bold; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+        
+        :root {
+            --bg: #0a0a0f;
+            --card: #111118;
+            --border: #1e1e2e;
+            --accent: #7c3aed;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --alpaca-blue: #2161f2;
+        }
+
+        body { 
+            background: var(--bg); 
+            color: var(--text); 
+            font-family: 'Syne', sans-serif; 
+            padding: 3rem; 
+            min-height: 100vh;
+        }
+
+        h1 { 
+            margin-bottom: 3rem; 
+            font-size: 2.5rem; 
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        h1 span { color: var(--accent); }
+
+        .grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); 
+            gap: 2rem; 
+        }
+
+        .card { 
+            background: var(--card); 
+            border: 1px solid var(--border); 
+            padding: 2rem; 
+            border-radius: 16px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .card:hover { 
+            border-color: var(--accent); 
+            transform: translateY(-8px);
+            box-shadow: 0 12px 24px rgba(0,0,0,0.5);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: var(--accent);
+            opacity: 0.7;
+        }
+
+        .card.alpaca::before { background: var(--alpaca-blue); }
+
+        .status { 
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: #10b981;
+            margin-bottom: 1rem;
+        }
+
+        .dot { 
+            width: 8px; height: 8px; 
+            border-radius: 50%; 
+            background: #10b981; 
+            box-shadow: 0 0 8px #10b981;
+        }
+
+        h3 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+        
+        p { 
+            color: var(--muted); 
+            font-size: 0.9rem; 
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .btn { 
+            display: inline-block; 
+            padding: 0.6rem 1.2rem; 
+            background: var(--accent); 
+            border-radius: 8px; 
+            font-weight: 700; 
+            font-size: 0.85rem;
+            transition: opacity 0.2s;
+        }
+
+        .card.alpaca .btn { background: var(--alpaca-blue); }
+        .card:hover .btn { opacity: 0.9; }
+
+        .tag {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            background: var(--border);
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: var(--muted);
+        }
     </style>
 </head>
 <body>
-    <h1>Portail de Supervision Crypto</h1>
+    <h1>Gestionnaire de <span>Bots</span></h1>
+    
     <div class="grid">
         <a href="eth-bot.html" class="card">
-            <div style="display:flex; justify-content:space-between;">
-                <h3>ETH / USDT Bot</h3>
-                <span class="status"></span>
+            <span class="tag">Binance API</span>
+            <div class="status">
+                <div class="dot"></div>
+                <span>CRYPTO LIVE</span>
             </div>
-            <p style="color:#64748b; margin-top:0.5rem;">Stratégie : Régime + ATR Adaptatif</p>
-            <div class="btn">Ouvrir le Dashboard</div>
+            <h3>ETH / USDT Bot</h3>
+            <p>Stratégie : Régime + ATR Adaptatif.<br>Suivi des tendances et scalping ETH.</p>
+            <div class="btn">Monitorer le bot</div>
         </a>
 
-        <div class="card" style="opacity: 0.5; cursor: not-allowed;">
-            <h3>BTC / USDT Bot</h3>
-            <p style="color:#64748b; margin-top:0.5rem;">En attente de déploiement...</p>
+        <a href="alpaca-dashboard.html" class="card alpaca">
+            <span class="tag">Alpaca API</span>
+            <div class="status">
+                <div class="dot"></div>
+                <span>EQUITIES LIVE</span>
+            </div>
+            <h3>Alpaca Stock Bot</h3>
+            <p>Stratégie : Mean Reversion (SMA200 + RSI).<br>Trading AAPL, MSFT, GOOGL, NVDA.</p>
+            <div class="btn">Ouvrir le terminal</div>
+        </a>
+
+        <div class="card" style="opacity: 0.4; filter: grayscale(1); cursor: not-allowed;">
+            <h3>Prochain Bot</h3>
+            <p>Développement en cours...</p>
         </div>
     </div>
 </body>
