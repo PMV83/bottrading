@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alpaca Equities Bot — Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap');
+  :root {
+    --bg:#0a0a0f; --surface:#111118; --border:#1e1e2e;
+    --accent:#7c3aed; --green:#10b981; --red:#ef4444; --amber:#f59e0b; --blue:#3b82f6;
+    --text:#e2e8f0; --muted:#64748b; --card:#13131f;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body {
+    background:var(--bg); color:var(--text);
+    font-family:'Syne',sans-serif; min-height:100vh; padding:2rem;
+  }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events:none; z-index:0; opacity:0.4;
+  }
+  .container { max-width:1200px; margin:0 auto; position:relative; z-index:1; }
+
+  /* ── Header ── */
+  .header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:2.5rem; flex-wrap:wrap; gap:1rem; }
+  .header-left h1 { font-size:2.2rem; font-weight:800; letter-spacing:-0.03em; }
+  .header-left h1 span { color:var(--accent); }
+  .header-left p { color:var(--muted); font-size:0.85rem; margin-top:0.3rem; font-family:'JetBrains Mono',monospace; }
+  .live-dot { display:flex; align-items:center; gap:8px; font-size:0.8rem; color:var(--green); font-family:'JetBrains Mono',monospace; margin-top:0.5rem; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--green); animation:blink 1.5s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .header-right { display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
+  .market-badge { padding:0.45rem 1.1rem; border-radius:100px; font-size:0.82rem; font-weight:700; letter-spacing:0.06em; border:1px solid; font-family:'JetBrains Mono',monospace; }
+  .market-OPEN   { background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.3); color:var(--green); }
+  .market-CLOSED { background:rgba(239,68,68,0.1); border-color:rgba(239,68,68,0.3); color:var(--red); }
+  .market-PRE_MARKET { background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.3); color:var(--amber); }
+
+  /* ── Symbole selector ── */
+  .symbol-tabs { display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
+  .sym-btn {
+    padding:0.4rem 1rem; border-radius:8px; border:1px solid var(--border);
+    background:var(--card); color:var(--muted); font-family:'JetBrains Mono',monospace;
+    font-size:0.8rem; cursor:pointer; transition:all 0.2s; font-weight:600;
+  }
+  .sym-btn:hover { border-color:var(--accent); color:var(--text); }
+  .sym-btn.active { background:rgba(124,58,237,0.15); border-color:var(--accent); color:var(--accent); }
+
+  /* ── Metrics ── */
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; margin-bottom:1.5rem; }
+  @media(max-width:800px){ .metrics { grid-template-columns:repeat(2,1fr); } }
+  .metric-card {
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    padding:1.25rem 1.5rem; position:relative; overflow:hidden;
+  }
+  .metric-card::after {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    background:var(--accent); opacity:0.5;
+  }
+  .metric-card.green::after { background:var(--green); }
+  .metric-card.red::after   { background:var(--red); }
+  .metric-card.amber::after { background:var(--amber); }
+  .metric-card.blue::after  { background:var(--blue); }
+  .metric-label { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.6rem; font-family:'JetBrains Mono',monospace; }
+  .metric-value { font-size:1.75rem; font-weight:800; letter-spacing:-0.02em; }
+  .metric-sub   { font-size:0.75rem; color:var(--muted); margin-top:0.3rem; font-family:'JetBrains Mono',monospace; }
+  .green-text { color:var(--green); }
+  .red-text   { color:var(--red); }
+  .amber-text { color:var(--amber); }
+  .blue-text  { color:var(--blue); }
+
+  /* ── Cards ── */
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.5rem; margin-bottom:1.5rem; }
+  .card-title { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:1.25rem; font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between; align-items:center; }
+  #tvchart { width:100%; height:380px; border-radius:8px; overflow:hidden; }
+
+  /* ── Bottom grid ── */
+  .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  @media(max-width:800px){ .bottom-grid { grid-template-columns:1fr; } }
+
+  /* ── Positions ouvertes ── */
+  .pos-item { display:flex; align-items:center; justify-content:space-between; padding:0.8rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; }
+  .pos-item:last-child { border:none; }
+  .pos-sym { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:1rem; color:var(--accent); min-width:60px; }
+  .pos-details { font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); display:flex; flex-direction:column; gap:2px; flex:1; padding:0 1rem; }
+  .pos-pnl { font-family:'JetBrains Mono',monospace; font-size:0.9rem; font-weight:700; padding:3px 10px; border-radius:6px; }
+  .pnl-pos { background:rgba(16,185,129,0.1); color:var(--green); }
+  .pnl-neg { background:rgba(239,68,68,0.1); color:var(--red); }
+  .pnl-neu { background:rgba(100,116,139,0.1); color:var(--muted); }
+
+  /* ── Trade history ── */
+  .trade-item { display:flex; align-items:center; justify-content:space-between; padding:0.75rem 0; border-bottom:1px solid var(--border); font-size:0.85rem; }
+  .trade-item:last-child { border:none; }
+  .trade-left { display:flex; align-items:center; gap:10px; }
+  .trade-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .trade-icon.tp { background:rgba(16,185,129,0.15); color:var(--green); }
+  .trade-icon.sl { background:rgba(239,68,68,0.15); color:var(--red); }
+  .trade-info { font-family:'JetBrains Mono',monospace; }
+  .trade-sym  { font-size:0.85rem; font-weight:700; }
+  .trade-meta { font-size:0.7rem; color:var(--muted); }
+
+  /* ── Logs ── */
+  .log-area {
+    background:var(--bg); border:1px solid var(--border); border-radius:10px;
+    padding:1rem; height:260px; overflow-y:auto;
+    font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--muted); line-height:1.8;
+  }
+  .log-buy   { color:var(--green); }
+  .log-sell  { color:var(--red); }
+  .log-warn  { color:var(--amber); }
+  .log-error { color:var(--red); opacity:0.7; }
+
+  .empty { color:var(--muted); font-size:0.85rem; text-align:center; padding:2rem; font-family:'JetBrains Mono',monospace; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- ── Header ── -->
+  <div class="header">
+    <div class="header-left">
+      <h1>Alpaca <span>Equities</span> Bot</h1>
+      <p>Mean Reversion · SMA200 + RSI(14) · Paper Trading</p>
+      <div class="live-dot"><div class="dot"></div><span id="lastUpdate">Chargement...</span></div>
+    </div>
+    <div class="header-right">
+      <div id="marketBadge" class="market-badge market-CLOSED">⬤ CLOSED</div>
+    </div>
+  </div>
+
+  <!-- ── Métriques principales ── -->
+  <div class="metrics">
+    <div class="metric-card">
+      <div class="metric-label">Valeur Portefeuille</div>
+      <div class="metric-value" id="valCapital">—</div>
+      <div class="metric-sub" id="subBP">BP: —</div>
+    </div>
+    <div class="metric-card green">
+      <div class="metric-label">P&amp;L Total</div>
+      <div class="metric-value green-text" id="valPnl">—</div>
+      <div class="metric-sub" id="subPnlPct">+0.00%</div>
+    </div>
+    <div class="metric-card amber">
+      <div class="metric-label">Win Rate</div>
+      <div class="metric-value amber-text" id="valWinrate">— %</div>
+      <div class="metric-sub" id="subTrades">0 trades</div>
+    </div>
+    <div class="metric-card blue">
+      <div class="metric-label">Positions ouvertes</div>
+      <div class="metric-value blue-text" id="valPositions">0</div>
+      <div class="metric-sub" id="subLastSignal">Dernier signal : —</div>
+    </div>
+  </div>
+
+  <!-- ── Sélecteur de symbole + Graphique ── -->
+  <div class="card">
+    <div class="card-title">
+      <span>Graphique Quotidien (Alpaca Market Data)</span>
+      <span id="chartSymbolLabel" style="color:var(--accent); font-size:0.82rem;">AAPL</span>
+    </div>
+    <div class="symbol-tabs" id="symbolTabs"></div>
+    <div id="tvchart"></div>
+  </div>
+
+  <!-- ── Bas de page : positions + logs ── -->
+  <div class="bottom-grid">
+
+    <!-- Positions ouvertes + Historique -->
+    <div class="card">
+      <div class="card-title">
+        <span>Positions &amp; Historique</span>
+        <span id="tradeCount" style="color:var(--accent);">0</span>
+      </div>
+      <div id="positionsList"><div class="empty">Aucune position ouverte</div></div>
+      <div style="margin-top:1rem; border-top:1px solid var(--border); padding-top:1rem;">
+        <div style="font-size:0.7rem; color:var(--muted); font-family:'JetBrains Mono',monospace; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.75rem;">Derniers Trades</div>
+        <div id="tradesList"><div class="empty">Aucun trade clôturé</div></div>
+      </div>
+    </div>
+
+    <!-- Logs Système -->
+    <div class="card">
+      <div class="card-title">Logs Système</div>
+      <div id="logArea" class="log-area"><span>En attente du bot...</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const CAPITAL_INIT = 100000.0;
+const SYMBOLS      = ["AAPL", "MSFT", "GOOGL", "NVDA"];
+
+// ─── ÉTAT GRAPHIQUE ───────────────────────────────────────────────────────────
+let chart, candleSeries;
+let chartReady      = false;
+let currentSymbol   = SYMBOLS[0];
+let lastTradeHashes = "";  // Pour éviter de re-setter les marqueurs inutilement
+
+// ─── INITIALISATION TRADINGVIEW ───────────────────────────────────────────────
+function initChart() {
+  chart = LightweightCharts.createChart(document.getElementById("tvchart"), {
+    layout: {
+      textColor: "#64748b",
+      background: { type: "solid", color: "#13131f" },
+    },
+    grid: {
+      vertLines: { color: "#1e1e2e" },
+      horzLines: { color: "#1e1e2e" },
+    },
+    timeScale: {
+      timeVisible:    false,  // Bougies quotidiennes, date suffit
+      secondsVisible: false,
+      borderColor:    "#1e1e2e",
+    },
+    rightPriceScale: { borderColor: "#1e1e2e" },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  candleSeries = chart.addCandlestickSeries({
+    upColor:      "#10b981",
+    downColor:    "#ef4444",
+    borderVisible: false,
+    wickUpColor:   "#10b981",
+    wickDownColor: "#ef4444",
+  });
+
+  // Tabs symboles
+  const tabs = document.getElementById("symbolTabs");
+  SYMBOLS.forEach(sym => {
+    const btn = document.createElement("button");
+    btn.className   = "sym-btn" + (sym === currentSymbol ? " active" : "");
+    btn.textContent = sym;
+    btn.dataset.sym = sym;
+    btn.onclick     = () => switchSymbol(sym);
+    tabs.appendChild(btn);
+  });
+
+  loadChartData(currentSymbol);
+}
+
+// ─── CHARGEMENT DES BOUGIES (API Alpaca Market Data — public endpoint) ────────
+async function loadChartData(symbol) {
+  document.getElementById("chartSymbolLabel").textContent = symbol + " — Chargement...";
+  candleSeries.setData([]);
+  candleSeries.setMarkers([]);
+  chartReady = false;
+
+  try {
+    /*
+     * IMPORTANT : L'API Alpaca /v2/stocks/{symbol}/bars nécessite une clé API.
+     * Pour un dashboard purement client-side (sans backend), on peut utiliser
+     * l'endpoint public Yahoo Finance (CORS autorisé via un proxy léger)
+     * ou injecter les barres via state.json enrichi par le bot.
+     *
+     * Solution retenue ici : Yahoo Finance JSON (gratuit, CORS OK via allorigins)
+     */
+    const endTs   = Math.floor(Date.now() / 1000);
+    const startTs = endTs - (365 * 24 * 3600); // 1 an de données
+    const url     = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&period1=${startTs}&period2=${endTs}&range=1y`;
+    const proxy   = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+
+    const res  = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
+    const json = await res.json();
+    const data = JSON.parse(json.contents);
+
+    const result    = data?.chart?.result?.[0];
+    const timestamps = result?.timestamp || [];
+    const ohlcv      = result?.indicators?.quote?.[0] || {};
+
+    if (!timestamps.length) throw new Error("Aucune donnée Yahoo Finance");
+
+    const candles = timestamps.map((t, i) => ({
+      time:  t,
+      open:  parseFloat((ohlcv.open[i]  || 0).toFixed(2)),
+      high:  parseFloat((ohlcv.high[i]  || 0).toFixed(2)),
+      low:   parseFloat((ohlcv.low[i]   || 0).toFixed(2)),
+      close: parseFloat((ohlcv.close[i] || 0).toFixed(2)),
+    })).filter(c => c.open > 0 && c.close > 0);
+
+    candleSeries.setData(candles);
+    chart.timeScale().fitContent();
+    chartReady = true;
+    document.getElementById("chartSymbolLabel").textContent = symbol;
+
+  } catch(e) {
+    console.error("Erreur chargement graphique :", e);
+    document.getElementById("chartSymbolLabel").textContent = symbol + " — Erreur données";
+  }
+}
+
+function switchSymbol(sym) {
+  currentSymbol = sym;
+  document.querySelectorAll(".sym-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.sym === sym);
+  });
+  lastTradeHashes = "";
+  loadChartData(sym);
+}
+
+// ─── PLACEMENT DES MARQUEURS DE TRADES ────────────────────────────────────────
+function updateMarkers(tradeHistory) {
+  if (!chartReady || !tradeHistory?.length) return;
+
+  // Ne recalculer que si l'historique a changé
+  const newHash = JSON.stringify(tradeHistory.map(t => t.date + t.symbol + t.type));
+  if (newHash === lastTradeHashes) return;
+  lastTradeHashes = newHash;
+
+  // Filtrer uniquement les trades du symbole affiché
+  const markers = tradeHistory
+    .filter(t => t.symbol === currentSymbol)
+    .map(t => {
+      const ts   = Math.floor(new Date(t.date).getTime() / 1000);
+      const sign = t.pnl >= 0 ? "+" : "";
+      if (t.type === "TP") {
+        return {
+          time:     ts,
+          position: "aboveBar",
+          color:    "#10b981",
+          shape:    "arrowDown",
+          text:     `TP ${sign}${t.pnl.toFixed(2)}$`,
+        };
+      } else {
+        return {
+          time:     ts,
+          position: "belowBar",
+          color:    "#ef4444",
+          shape:    "arrowUp",
+          text:     `SL ${sign}${t.pnl.toFixed(2)}$`,
+        };
+      }
+    })
+    .sort((a, b) => a.time - b.time);  // Tri chronologique obligatoire
+
+  candleSeries.setMarkers(markers);
+}
+
+// ─── REFRESH ÉTAT BOT (state.json) ────────────────────────────────────────────
+async function refresh() {
+  try {
+    const res = await fetch("state.json?t=" + Date.now());
+    if (!res.ok) throw new Error("state.json introuvable — le bot est-il lancé ?");
+    const state = await res.json();
+
+    // ── Timestamp ──
+    document.getElementById("lastUpdate").textContent =
+      "Mis à jour · " + new Date().toLocaleTimeString("fr-FR");
+
+    // ── Marché ──
+    const badge     = document.getElementById("marketBadge");
+    const regime    = state.regime || "CLOSED";
+    badge.className = "market-badge market-" + regime;
+    const marketLabels = { OPEN: "⬤ OPEN", CLOSED: "⬤ CLOSED", PRE_MARKET: "⬤ PRE-MARKET" };
+    badge.textContent  = marketLabels[regime] || regime;
+
+    // ── Capital & P&L ──
+    const capital = state.capital    || CAPITAL_INIT;
+    const bp      = state.buying_power || 0;
+    const pnl     = capital - CAPITAL_INIT;
+    const pnlPct  = (pnl / CAPITAL_INIT * 100).toFixed(2);
+
+    document.getElementById("valCapital").textContent = "$" + capital.toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+    document.getElementById("subBP").textContent      = "BP disponible : $" + bp.toLocaleString("en-US", {minimumFractionDigits:0, maximumFractionDigits:0});
+
+    const pnlEl = document.getElementById("valPnl");
+    pnlEl.textContent = (pnl >= 0 ? "+" : "") + "$" + Math.abs(pnl).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
+    pnlEl.className   = "metric-value " + (pnl >= 0 ? "green-text" : "red-text");
+    document.getElementById("subPnlPct").textContent = (pnl >= 0 ? "+" : "") + pnlPct + "%";
+
+    // ── Win Rate ──
+    const total   = state.total_trades || 0;
+    const winners = state.winning_trades || 0;
+    const wr      = total > 0 ? Math.round(winners / total * 100) : null;
+    document.getElementById("valWinrate").textContent = wr !== null ? wr + " %" : "— %";
+    document.getElementById("subTrades").textContent  = total + " trade" + (total !== 1 ? "s" : "") + " clôturé" + (total !== 1 ? "s" : "");
+
+    // ── Positions ouvertes ──
+    const positions = state.positions || {};
+    const posCount  = Object.keys(positions).length;
+    document.getElementById("valPositions").textContent = posCount;
+    const lastSym   = state.last_symbol;
+    const lastSig   = state.last_signal || "HOLD";
+    document.getElementById("subLastSignal").textContent =
+      lastSym ? `Dernier signal : ${lastSig} ${lastSym}` : "Aucun signal récent";
+
+    // ── Rendu positions ouvertes ──
+    const latestPrices = state.latest_prices || {};
+    const posHtml = posCount > 0
+      ? Object.entries(positions).map(([sym, pos]) => {
+          const curPrice = latestPrices[sym] || pos.entry_price;
+          const pnlLive  = ((curPrice - pos.entry_price) * pos.qty).toFixed(2);
+          const pnlClass = pnlLive >= 0 ? "pnl-pos" : "pnl-neg";
+          const pnlStr   = (pnlLive >= 0 ? "+" : "") + "$" + pnlLive;
+          const date     = pos.entry_time ? new Date(pos.entry_time).toLocaleDateString("fr-FR") : "—";
+          return `
+            <div class="pos-item">
+              <div class="pos-sym">${sym}</div>
+              <div class="pos-details">
+                <span>Entrée : $${pos.entry_price.toFixed(2)} × ${pos.qty}</span>
+                <span>SL : $${pos.stop_loss.toFixed(2)} | TP : $${pos.take_profit.toFixed(2)}</span>
+                <span>${date}</span>
+              </div>
+              <div class="pos-pnl ${pnlClass}">${pnlStr}</div>
+            </div>`;
+        }).join("")
+      : '<div class="empty">Aucune position ouverte</div>';
+    document.getElementById("positionsList").innerHTML = posHtml;
+
+    // ── Historique des trades clôturés ──
+    const history = state.trade_history || [];
+    document.getElementById("tradeCount").textContent = total + " total";
+    const tradesHtml = history.length > 0
+      ? history.slice().reverse().map(t => {
+          const isTp     = t.type === "TP";
+          const icon     = isTp ? "◆" : "▼";
+          const iconCls  = isTp ? "tp" : "sl";
+          const pnlClass = t.pnl > 0 ? "pnl-pos" : "pnl-neg";
+          const pnlStr   = (t.pnl >= 0 ? "+" : "") + "$" + t.pnl.toFixed(2);
+          const label    = isTp ? "TAKE PROFIT" : "STOP LOSS";
+          const dateStr  = t.date ? new Date(t.date).toLocaleDateString("fr-FR") : "";
+          return `
+            <div class="trade-item">
+              <div class="trade-left">
+                <div class="trade-icon ${iconCls}">${icon}</div>
+                <div class="trade-info">
+                  <div class="trade-sym">${t.symbol || "?"} — ${label}</div>
+                  <div class="trade-meta">
+                    ${t.entry ? "$" + t.entry.toFixed(2) + " → $" + t.exit.toFixed(2) : ""}
+                    ${dateStr ? "· " + dateStr : ""}
+                  </div>
+                </div>
+              </div>
+              <div class="pos-pnl ${pnlClass}">${pnlStr}</div>
+            </div>`;
+        }).join("")
+      : '<div class="empty">Aucun trade clôturé</div>';
+    document.getElementById("tradesList").innerHTML = tradesHtml;
+
+    // ── Marqueurs graphique ──
+    updateMarkers(history);
+
+    // ── Logs système depuis state.json ──
+    const logs    = state.logs || [];
+    const logHtml = logs.length > 0
+      ? logs.slice().reverse().map(l => {
+          const cls = l.level === "buy"   ? "log-buy"
+                    : l.level === "sell"  ? "log-sell"
+                    : l.level === "warn"  ? "log-warn"
+                    : l.level === "error" ? "log-error"
+                    : "";
+          const esc = l.msg.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+          return `<div class="${cls}">[${l.time}] ${esc}</div>`;
+        }).join("")
+      : "<div>En attente de données...</div>";
+
+    const logEl = document.getElementById("logArea");
+    logEl.innerHTML = logHtml;
+    logEl.scrollTop = 0; // Logs inversés : le plus récent en haut
+
+  } catch(e) {
+    document.getElementById("lastUpdate").textContent = "Erreur — " + e.message;
+    console.error("refresh() :", e);
+  }
+}
+
+// ─── DÉMARRAGE ────────────────────────────────────────────────────────────────
+initChart();
+refresh();
+setInterval(refresh, 15000);  // Rafraîchissement toutes les 15 secondes
+</script>
+</body>
+</html>
