@@ -55,16 +55,44 @@
   .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:1.5rem; margin-bottom:1.5rem; }
   .card-title { font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:1.25rem; font-family:'JetBrains Mono',monospace; display:flex; justify-content:space-between; align-items:center; }
 
-  /* Graphique */
-  .symbol-tabs { display:flex; gap:0.5rem; margin-bottom:1.5rem; flex-wrap:wrap; }
-  .sym-btn { padding:0.4rem 1rem; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--muted); font-family:'JetBrains Mono',monospace; font-size:0.8rem; cursor:pointer; transition:all 0.2s; font-weight:600; }
-  .sym-btn:hover { border-color:var(--accent); color:var(--text); }
-  .sym-btn.active { background:rgba(124,58,237,0.15); border-color:var(--accent); color:var(--accent); }
+  /* Graphique & Dropdown */
+  .sym-select {
+    background: var(--surface); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 0.5rem 1rem; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem; cursor: pointer; outline: none;
+    margin-bottom: 1.5rem; width: 150px; font-weight: 600;
+  }
+  .sym-select:focus { border-color: var(--accent); }
   #tvchart { width:100%; height:380px; border-radius:8px; overflow:hidden; }
   .data-badge { font-size:0.68rem; font-family:'JetBrains Mono',monospace; color:var(--muted); display:flex; align-items:center; gap:6px; }
   .data-badge .dot-sm { width:6px; height:6px; border-radius:50%; background:var(--green); flex-shrink:0; }
 
+  /* ── ★ HEATMAP ──────────────────────────────────────────────── */
+  .heatmap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(55px, 1fr));
+    gap: 6px;
+  }
+  .heatmap-cell {
+    padding: 8px 2px;
+    border-radius: 6px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .heatmap-cell:hover { opacity: 0.8; transform: scale(1.05); }
+
   /* ── ★ TABLEAU DERNIER SCAN ─────────────────────────────────── */
+  .sym-btn { padding:0.4rem 1rem; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); font-family:'JetBrains Mono',monospace; font-size:0.75rem; cursor:pointer; transition:all 0.2s; font-weight:600; }
+  .sym-btn:hover { border-color:var(--accent); }
+  .sym-btn.active { background:rgba(16,185,129,0.15); border-color:var(--green); color:var(--green); }
+
   .scan-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:0.78rem; }
   .scan-table thead th {
     text-align:left; padding:0.5rem 0.75rem;
@@ -139,7 +167,6 @@
 <body>
 <div class="container">
 
-  <!-- Header -->
   <div class="header">
     <div class="header-left">
       <h1>Alpaca <span>Equities</span> Bot</h1>
@@ -151,7 +178,6 @@
     </div>
   </div>
 
-  <!-- Métriques -->
   <div class="metrics">
     <div class="metric-card">
       <div class="metric-label">Portefeuille</div>
@@ -175,45 +201,58 @@
     </div>
   </div>
 
-  <!-- ★ TABLEAU DERNIER SCAN ────────────────────────────────────────────────── -->
-  <div class="card" style="margin-bottom:1.5rem;">
-    <div class="card-title">
-      <span>Dernier Scan Technique</span>
-      <span id="scanTimestamp" style="color:var(--muted); font-size:0.68rem;">—</span>
-    </div>
-    <table class="scan-table" id="scanTable">
-      <thead>
-        <tr>
-          <th>Symbole</th>
-          <th>Prix</th>
-          <th>SMA 200</th>
-          <th>Δ SMA</th>
-          <th>RSI(14)</th>
-          <th>Signal</th>
-          <th>Scanné à</th>
-        </tr>
-      </thead>
-      <tbody id="scanTableBody">
-        <tr><td colspan="7" class="empty">En attente du premier scan...</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <!-- ─────────────────────────────────────────────────────────────────────── -->
-
-  <!-- Graphique -->
   <div class="card">
     <div class="card-title">
+      <span>Market Heatmap — RSI</span>
+      <span style="font-size: 0.65rem; color: var(--muted); text-transform: none;">
+        🟩 &lt; 40 (Survendu) &nbsp;|&nbsp; 🟥 &gt; 70 (Suracheté)
+      </span>
+    </div>
+    <div class="heatmap-grid" id="heatmapGrid">
+      <div class="empty" style="grid-column: 1 / -1;">En attente des données...</div>
+    </div>
+  </div>
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-title" style="margin-bottom: 0.75rem;">
+      <span>Dernier Scan Technique</span>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <button id="filterBtn" class="sym-btn" onclick="toggleFilter()">🔍 Filtrer signaux (Achat/Pos)</button>
+        <span id="scanTimestamp" style="color:var(--muted); font-size:0.68rem;">—</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="scan-table" id="scanTable">
+        <thead>
+          <tr>
+            <th>Symbole</th>
+            <th>Prix</th>
+            <th>SMA 200</th>
+            <th>Δ SMA</th>
+            <th>RSI(14)</th>
+            <th>Signal</th>
+            <th>Scanné à</th>
+          </tr>
+        </thead>
+        <tbody id="scanTableBody">
+          <tr><td colspan="7" class="empty">En attente du premier scan...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="margin-bottom: 0.5rem;">
       <span>Graphique Quotidien (Alpaca Market Data — local)</span>
       <div style="display:flex;align-items:center;gap:12px;">
         <div class="data-badge"><div class="dot-sm"></div><span id="dataUpdatedAt">—</span></div>
-        <span id="chartSymbolLabel" style="color:var(--accent);font-size:0.82rem;">AAPL</span>
+        <span id="chartSymbolLabel" style="color:var(--accent);font-size:0.82rem;">—</span>
       </div>
     </div>
-    <div class="symbol-tabs" id="symbolTabs"></div>
+    <select id="symbolSelect" class="sym-select" onchange="switchSymbol(this.value)">
+      <option value="">Chargement...</option>
+    </select>
     <div id="tvchart"></div>
   </div>
 
-  <!-- Bas : positions + logs -->
   <div class="bottom-grid">
     <div class="card">
       <div class="card-title">
@@ -235,16 +274,24 @@
 
 <script>
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
-const CAPITAL_INIT = 100.0;   // ★ Synchronisé avec capital_initial Python
-const SYMBOLS      = ["AAPL", "MSFT", "GOOGL", "NVDA"];
+const CAPITAL_INIT = 100.0;
+let SYMBOLS = []; // Désormais dynamique !
 
 // ─── ÉTAT GRAPHIQUE ───────────────────────────────────────────────────────────
 let chart, candleSeries;
-let chartReady      = false;
-let currentSymbol   = SYMBOLS[0];
-let lastTradeHashes = "";
-let marketDataCache = {};
+let chartReady       = false;
+let currentSymbol    = null;
+let lastTradeHashes  = "";
+let marketDataCache  = {};
 let marketDataLoaded = false;
+let filterActive     = false;
+
+// ─── FILTRAGE TABLEAU ─────────────────────────────────────────────────────────
+function toggleFilter() {
+  filterActive = !filterActive;
+  document.getElementById("filterBtn").classList.toggle("active", filterActive);
+  refresh(); // Relance le rendu du tableau avec l'état actuel
+}
 
 // ─── INIT TRADINGVIEW ─────────────────────────────────────────────────────────
 function initChart() {
@@ -258,15 +305,6 @@ function initChart() {
   candleSeries = chart.addCandlestickSeries({
     upColor:"#10b981", downColor:"#ef4444", borderVisible:false,
     wickUpColor:"#10b981", wickDownColor:"#ef4444",
-  });
-  const tabs = document.getElementById("symbolTabs");
-  SYMBOLS.forEach(sym => {
-    const btn = document.createElement("button");
-    btn.className   = "sym-btn" + (sym === currentSymbol ? " active" : "");
-    btn.textContent = sym;
-    btn.dataset.sym = sym;
-    btn.onclick     = () => switchSymbol(sym);
-    tabs.appendChild(btn);
   });
 }
 
@@ -292,6 +330,7 @@ async function loadMarketData() {
 }
 
 function renderChart(symbol) {
+  if (!symbol) return;
   document.getElementById("chartSymbolLabel").textContent = symbol + " — Chargement...";
   candleSeries.setData([]);
   candleSeries.setMarkers([]);
@@ -312,14 +351,14 @@ function renderChart(symbol) {
 
 async function switchSymbol(sym) {
   currentSymbol = sym;
-  document.querySelectorAll(".sym-btn").forEach(b => b.classList.toggle("active", b.dataset.sym === sym));
+  document.getElementById('symbolSelect').value = sym;
   lastTradeHashes = "";
   if (!marketDataLoaded) await loadMarketData();
   renderChart(sym);
 }
 
 function updateMarkers(tradeHistory) {
-  if (!chartReady || !tradeHistory?.length) return;
+  if (!chartReady || !tradeHistory?.length || !currentSymbol) return;
   const newHash = JSON.stringify(tradeHistory.map(t => t.date + t.symbol + t.type));
   if (newHash === lastTradeHashes) return;
   lastTradeHashes = newHash;
@@ -336,30 +375,58 @@ function updateMarkers(tradeHistory) {
   candleSeries.setMarkers(markers);
 }
 
+// ─── ★ RENDU HEATMAP MARKET ───────────────────────────────────────────────────
+function renderHeatmap(lastScan) {
+  if (!lastScan || !Object.keys(lastScan).length) return;
+  const grid = document.getElementById("heatmapGrid");
+  grid.innerHTML = SYMBOLS.map(sym => {
+    const s = lastScan[sym];
+    let bg = "var(--surface)";
+    let rsiLabel = "—";
+    if (s && s.rsi != null) {
+      const rsiVal = Number(s.rsi);
+      rsiLabel = rsiVal.toFixed(1);
+      if (rsiVal < 40) bg = "var(--green)";
+      else if (rsiVal > 70) bg = "var(--red)";
+    }
+    return `<div class="heatmap-cell" style="background:${bg}" 
+                 title="${sym} | RSI: ${rsiLabel}"
+                 onclick="switchSymbol('${sym}')">${sym}</div>`;
+  }).join("");
+}
+
 // ─── ★ RENDU TABLEAU DERNIER SCAN ─────────────────────────────────────────────
 function renderScanTable(lastScan) {
   if (!lastScan || !Object.keys(lastScan).length) return;
 
-  // Timestamp global = heure du scan le plus récent
   const times = Object.values(lastScan).map(s => s.scanned_at).filter(Boolean);
   if (times.length) {
     document.getElementById("scanTimestamp").textContent = "Dernier scan : " + times[times.length - 1];
   }
 
   const tbody = document.getElementById("scanTableBody");
-  tbody.innerHTML = SYMBOLS.map(sym => {
+  
+  // Filtrer les symboles si nécessaire
+  const filteredSymbols = SYMBOLS.filter(sym => {
+    if (!filterActive) return true;
+    const sig = lastScan[sym] ? lastScan[sym].signal : "HOLD";
+    return sig === "BUY" || sig === "POSITION";
+  });
+
+  if (filteredSymbols.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">Aucun signal actif.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filteredSymbols.map(sym => {
     const s = lastScan[sym];
     if (!s) {
-      return `<tr>
-        <td class="scan-sym">${sym}</td>
-        <td colspan="6" class="scan-sma">En attente...</td>
-      </tr>`;
+      return `<tr><td class="scan-sym">${sym}</td><td colspan="6" class="scan-sma">En attente...</td></tr>`;
     }
 
     const price = s.price != null ? `$${Number(s.price).toFixed(2)}` : "—";
     const sma   = s.sma200 != null ? `$${Number(s.sma200).toFixed(2)}` : "—";
 
-    // Calcul delta SMA en %
     let deltaBadge = "—";
     if (s.price != null && s.sma200 != null) {
       const delta = ((s.price - s.sma200) / s.sma200 * 100).toFixed(2);
@@ -367,29 +434,24 @@ function renderScanTable(lastScan) {
       const sign  = delta >= 0 ? "+" : "";
       deltaBadge  = `<span class="sma-delta ${cls}">${sign}${delta}%</span>`;
     }
-    if (s.signal === "POSITION") {
-      deltaBadge = "<span class='sma-delta' style='color:var(--blue)'>EN POS.</span>";
-    }
+    if (s.signal === "POSITION") deltaBadge = "<span class='sma-delta' style='color:var(--blue)'>EN POS.</span>";
 
-    // RSI : coloration selon valeur
     let rsiHtml = "—";
     if (s.rsi != null) {
       const rsiVal = Number(s.rsi);
       let rsiCls = "rsi-neutral";
-      if (rsiVal < 30)       rsiCls = "rsi-oversold";
-      else if (rsiVal < 45)  rsiCls = "rsi-mid";
+      if (rsiVal < 40)       rsiCls = "rsi-oversold";  // Ajusté pour s'accorder avec python à 40
+      else if (rsiVal < 50)  rsiCls = "rsi-mid";
       else if (rsiVal > 70)  rsiCls = "rsi-overbought";
       rsiHtml = `<span class="${rsiCls}">${rsiVal.toFixed(1)}</span>`;
     }
 
-    // Signal badge
     const sigCls = "signal-" + (s.signal || "HOLD");
     const sigIco = s.signal === "BUY" ? "🟢" : s.signal === "POSITION" ? "🔵" : "⚪";
     const sigBadge = `<span class="signal-badge ${sigCls}">${sigIco} ${s.signal || "HOLD"}</span>`;
-
     const scannedAt = s.scanned_at ? `<span class="scan-time">${s.scanned_at}</span>` : "—";
 
-    return `<tr>
+    return `<tr style="cursor:pointer;" onclick="switchSymbol('${sym}')">
       <td class="scan-sym">${sym}</td>
       <td class="scan-price">${price}</td>
       <td class="scan-sma">${sma}</td>
@@ -400,7 +462,6 @@ function renderScanTable(lastScan) {
     </tr>`;
   }).join("");
 }
-// ──────────────────────────────────────────────────────────────────────────────
 
 // ─── REFRESH (state.json) ─────────────────────────────────────────────────────
 async function refresh() {
@@ -411,13 +472,23 @@ async function refresh() {
 
     document.getElementById("lastUpdate").textContent = "Mis à jour · " + new Date().toLocaleTimeString("fr-FR");
 
-    // Marché
+    // Extraction dynamique des 100 symboles
+    if (state.last_scan) {
+      const extractedSymbols = Object.keys(state.last_scan).sort();
+      if (extractedSymbols.length > 0 && SYMBOLS.length !== extractedSymbols.length) {
+        SYMBOLS = extractedSymbols;
+        // Mise à jour du dropdown
+        const select = document.getElementById("symbolSelect");
+        select.innerHTML = SYMBOLS.map(sym => `<option value="${sym}">${sym}</option>`).join("");
+        if (currentSymbol) select.value = currentSymbol;
+      }
+    }
+
     const badge  = document.getElementById("marketBadge");
     const regime = state.regime || "CLOSED";
     badge.className = "market-badge market-" + regime;
     badge.textContent = regime === "OPEN" ? "⬤ OPEN" : "⬤ CLOSED";
 
-    // Capital & P&L — ★ précision 4 décimales pour petit portefeuille
     const capital = state.capital      || CAPITAL_INIT;
     const bp      = state.buying_power || 0;
     const pnl     = capital - CAPITAL_INIT;
@@ -431,24 +502,22 @@ async function refresh() {
     pnlEl.className   = "metric-value " + (pnl >= 0 ? "green-text" : "red-text");
     document.getElementById("subPnlPct").textContent = (pnl >= 0 ? "+" : "") + pnlPct + "%";
 
-    // Win Rate
     const total   = state.total_trades   || 0;
     const winners = state.winning_trades || 0;
     const wr      = total > 0 ? Math.round(winners / total * 100) : null;
     document.getElementById("valWinrate").textContent = wr !== null ? wr + " %" : "— %";
     document.getElementById("subTrades").textContent  = total + " trade" + (total !== 1 ? "s" : "") + " clôturé" + (total !== 1 ? "s" : "");
 
-    // Positions
     const positions = state.positions || {};
     const posCount  = Object.keys(positions).length;
     document.getElementById("valPositions").textContent = posCount;
     const lastSym = state.last_symbol, lastSig = state.last_signal || "HOLD";
     document.getElementById("subLastSignal").textContent = lastSym ? `Dernier : ${lastSig} ${lastSym}` : "Aucun signal";
 
-    // ★ Tableau Dernier Scan
+    // Mises à jour Table et Heatmap
+    renderHeatmap(state.last_scan || {});
     renderScanTable(state.last_scan || {});
 
-    // Positions ouvertes
     const latestPrices = state.latest_prices || {};
     const posHtml = posCount > 0
       ? Object.entries(positions).map(([sym, pos]) => {
@@ -471,7 +540,6 @@ async function refresh() {
       : '<div class="empty">Aucune position ouverte</div>';
     document.getElementById("positionsList").innerHTML = posHtml;
 
-    // Historique
     const history   = state.trade_history || [];
     document.getElementById("tradeCount").textContent = total + " total";
     const tradesHtml = history.length > 0
@@ -499,7 +567,6 @@ async function refresh() {
 
     updateMarkers(history);
 
-    // Logs
     const logs    = state.logs || [];
     const logHtml = logs.length > 0
       ? logs.slice().reverse().map(l => {
@@ -513,7 +580,7 @@ async function refresh() {
       : "<div>En attente de données...</div>";
     const logEl = document.getElementById("logArea");
     logEl.innerHTML = logHtml;
-    logEl.scrollTop = 0;
+    // logEl.scrollTop = 0; // Commenté pour ne pas forcer le scroll en haut à chaque refresh
 
   } catch(e) {
     document.getElementById("lastUpdate").textContent = "Erreur — " + e.message;
@@ -524,11 +591,18 @@ async function refresh() {
 // ─── DÉMARRAGE ────────────────────────────────────────────────────────────────
 async function init() {
   initChart();
+  await refresh(); // Force un premier fetch pour charger SYMBOLS
+  
+  if (SYMBOLS.length > 0 && !currentSymbol) {
+    currentSymbol = SYMBOLS[0];
+    document.getElementById("symbolSelect").value = currentSymbol;
+  }
+  
   await loadMarketData();
-  renderChart(currentSymbol);
-  await refresh();
+  if (currentSymbol) renderChart(currentSymbol);
+  
   setInterval(refresh, 15000);
-  setInterval(async () => { await loadMarketData(); renderChart(currentSymbol); }, 3600 * 1000);
+  setInterval(async () => { await loadMarketData(); if(currentSymbol) renderChart(currentSymbol); }, 3600 * 1000);
 }
 
 init();

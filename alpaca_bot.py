@@ -69,7 +69,7 @@ CONFIG = {
     ],
     "sma_period":         200,
     "rsi_period":         14,
-    "rsi_oversold":       30,
+    "rsi_oversold":       40,
     "lookback_days":      252,
 
     # Gestion du risque (modifiable dynamiquement par le module Macro-Régime)
