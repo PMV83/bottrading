@@ -54,7 +54,19 @@ def now() -> datetime:
 # ─── CONFIGURATION CENTRALE ───────────────────────────────────────────────────
 CONFIG = {
     # Univers et stratégie
-    "symbols":            ["AAPL", "MSFT", "GOOGL", "NVDA"],
+    # Top 100 des actions US (S&P 100 + Nasdaq Giants)
+    "symbols": [
+        "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "BRK.B", "LLY", "TSLA", "V",
+        "JPM", "UNH", "XOM", "MA", "JNJ", "PG", "HD", "AVGO", "COST", "MRK",
+        "ABBV", "CVX", "CRM", "AMD", "PEP", "BAC", "KO", "WMT", "TMO", "MCD",
+        "CSCO", "INTC", "ABT", "INTU", "WFC", "CMCSA", "DHR", "NFLX", "ORCL", "ADBE",
+        "DIS", "TXN", "VZ", "PM", "NEE", "QCOM", "PFE", "HON", "AMGN", "IBM",
+        "UNP", "BA", "GE", "CAT", "GS", "MS", "SPGI", "LOW", "AXP", "RTX",
+        "NOW", "BKNG", "ISRG", "BLK", "PLD", "MDT", "EL", "T", "SBUX", "SYK",
+        "C", "TJX", "CB", "ZTS", "MO", "GILD", "CI", "FI", "BDX", "MMM",
+        "SO", "MMC", "ADI", "CME", "D", "VRTX", "REGN", "ITW", "EOG", "NOC",
+        "BSX", "HUM", "EW", "PNC", "ETN", "CSX", "KLAC", "WM", "F", "GM"
+    ],
     "sma_period":         200,
     "rsi_period":         14,
     "rsi_oversold":       30,
