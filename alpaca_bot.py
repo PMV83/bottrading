@@ -939,9 +939,10 @@ def run():
             sync_positions_from_alpaca(state)
 
             # ── Analyse des symboles ───────────────────────────────────────────
+# ── Analyse des symboles ───────────────────────────────────────────
             for symbol in CONFIG["symbols"]:
 
-                # Position déjà ouverte : heartbeat + mise à jour prix
+                # ── Position déjà ouverte : heartbeat + gestion SL/TP manuelle ──
                 if symbol in state["positions"]:
                     price = get_latest_price(symbol)
                     if price:
@@ -962,7 +963,92 @@ def run():
                         "reason":     f"En position (entrée {pos.get('entry_time','?')[:10]})",
                         "scanned_at": now().strftime("%H:%M:%S"),
                     }
-                    continue
+
+                    # ── Clôture manuelle SL/TP pour les ordres market_only ─────
+                    # Les Bracket Orders natifs sont gérés par Alpaca (sync_positions).
+                    # Pour les market_only (fractions), on surveille le prix ici
+                    # et on envoie nous-mêmes l'ordre de vente au déclenchement.
+                    if pos.get("order_type") == "market_only" and price:
+                        tp_hit = price >= pos["take_profit"]
+                        sl_hit = price <= pos["stop_loss"]
+
+                        if tp_hit or sl_hit:
+                            trigger     = "TP" if tp_hit else "SL"
+                            exit_price  = price
+
+                            log.info(
+                                f"[{symbol}] {trigger} déclenché manuellement | "
+                                f"Prix:${exit_price:.2f} | "
+                                f"SL:${pos['stop_loss']} | TP:${pos['take_profit']}"
+                            )
+
+                            # ── Ordre de vente au marché ──────────────────────
+                            sell_ok = False
+                            try:
+                                sell_order = trading_client.submit_order(
+                                    MarketOrderRequest(
+                                        symbol=symbol,
+                                        qty=pos["qty"],
+                                        side=OrderSide.SELL,
+                                        time_in_force=TimeInForce.DAY,
+                                    )
+                                )
+                                log.info(
+                                    f"✅ Ordre SELL soumis | {symbol} | "
+                                    f"qty:{pos['qty']} | ID:{sell_order.id}"
+                                )
+                                sell_ok = True
+                            except Exception as e:
+                                log.error(
+                                    f"❌ Échec ordre SELL {symbol} : {e} — "
+                                    f"position conservée, retry au prochain cycle"
+                                )
+
+                            # ── Mise à jour du state uniquement si l'ordre est passé ──
+                            if sell_ok:
+                                pnl        = round((exit_price - pos["entry_price"]) * pos["qty"], 4)
+                                icon       = "✅" if pnl > 0 else "❌"
+
+                                state["capital"]      = round(state["capital"]   + pnl, 4)
+                                state["total_pnl"]    = round(state["total_pnl"] + pnl, 4)
+                                state["day_pnl"]      = round(state["day_pnl"]   + pnl, 4)
+                                state["total_trades"] += 1
+                                if pnl > 0:
+                                    state["winning_trades"] += 1
+
+                                state["trade_history"].append({
+                                    "type":   trigger,
+                                    "symbol": symbol,
+                                    "pnl":    pnl,
+                                    "entry":  pos["entry_price"],
+                                    "exit":   round(exit_price, 2),
+                                    "qty":    pos["qty"],
+                                    "sl":     pos["stop_loss"],
+                                    "tp":     pos["take_profit"],
+                                    "date":   now().isoformat(),
+                                })
+                                state["trade_history"] = state["trade_history"][-10:]
+
+                                del state["positions"][symbol]
+                                state["in_position"] = len(state["positions"]) > 0
+
+                                msg = (
+                                    f"{icon} CLÔTURE {symbol} (market_only) | "
+                                    f"${pos['entry_price']:.2f}→${exit_price:.2f} | "
+                                    f"P&L:{'+' if pnl>=0 else ''}{pnl:.4f}$ | {trigger}"
+                                )
+                                log.info("=" * 60)
+                                log.info(msg)
+                                log.info("=" * 60)
+                                push_log(state, msg, "sell")
+                                discord_alert(
+                                    f"{icon} **CLÔTURE {symbol}** _(market only)_\n"
+                                    f"${pos['entry_price']:.2f} → ${exit_price:.2f} | **{trigger}**\n"
+                                    f"P&L: **{'+' if pnl>=0 else ''}{pnl:.4f}$**\n"
+                                    f"Capital: ${state['capital']:.4f}"
+                                )
+
+                    continue  # ← Toujours skip l'analyse technique si position ouverte
 
                 # Analyse technique
                 analysis = analyze_symbol(symbol)
@@ -982,15 +1068,12 @@ def run():
                     continue
 
                 # ── Module IA ① : Filtre Sentiment ────────────────────────────
-                # Appelé AVANT le sizing et l'ordre.
-                # Si PANIQUE → on skip ce symbole et on passe au suivant.
                 if not ia_filtre_sentiment(symbol, state):
-                    # Mise à jour du last_scan pour indiquer le blocage IA
                     state["last_scan"][symbol]["signal"] = "IA_PANIQUE"
                     state["last_scan"][symbol]["reason"] = "Bloqué par filtre sentiment IA"
-                    continue   # ← Achat annulé, on passe au symbole suivant
+                    continue
 
-                # Sizing fractionnel (utilise risk_pct_per_trade potentiellement réduit par IA②)
+                # Sizing fractionnel
                 qty = calc_position_size(state["capital"], buying_power, price)
                 if qty <= 0:
                     msg = f"[{symbol}] Sizing=0 (capital ${state['capital']:.4f} insuffisant)"
